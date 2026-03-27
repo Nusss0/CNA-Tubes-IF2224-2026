@@ -1,10 +1,8 @@
-#include <bits/stdc++.h>
+#pragma once
 
+// STL
+#include "std.hpp"
 
-
-using namespace std;
-
-//user
+// User headers
+#include "lexical/token_processing.hpp"
 #include "helpers/word_machine.hpp"
-
-

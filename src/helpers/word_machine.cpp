@@ -16,3 +16,14 @@ string DFAFileReader(const string fileName){
 
     return res;
 }
+
+void TokenPrinter(vector<Token> &tokens){
+    for(auto &t : tokens){
+        if(t.value.empty()){
+            cout << t.type << endl;
+        }
+        else{
+            cout << t.type << "("<< t.value << ")" << endl;
+        }
+    }
+}

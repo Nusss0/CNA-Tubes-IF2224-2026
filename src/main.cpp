@@ -1,12 +1,18 @@
 #include "main.hpp"
 
 
-int main(int argc, char* argv[]) {
+int main() {
+   //file name input 
+   string path, fileName;
+   cout << "[NOTES] : Just use filename without path\n";
+   cout << "Enter file path: ";
+   cin >> fileName;
+   path = "test/M1/" + fileName;
 
-   //Error handling kalau parameter run < 1
-   if (argc != 2){
-      cerr << "Usage : make run \"File Name\" \n";
-      return 1;
-   }
-   cout << DFAFileReader(argv[1]) << endl;
+   //file processing
+   string raw;
+   raw = DFAFileReader(path);
+   vector<Token> tokens = Tokenizing(raw);
+   TokenPrinter(tokens);
+   
 }
