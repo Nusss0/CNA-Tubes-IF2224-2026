@@ -1,9 +1,12 @@
 #pragma once
 
 #include "../std.hpp"
-#include "../lexical/token_processing.hpp"
+// Forward declaration to avoid circular include with token_processing
+struct Token;
+
 //Read everything from file and return it into one single line string.
 string DFAFileReader(const string fileName);
 
 
-void TokenPrinter(vector<Token> &tokens);
+void TokenPrinter(const vector<Token> &tokens);
+void ErrorTokenMessage(const char token, const string after);

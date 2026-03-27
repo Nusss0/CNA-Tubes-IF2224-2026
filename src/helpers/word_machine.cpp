@@ -1,4 +1,5 @@
 #include "word_machine.hpp"
+#include "../lexical/token_processing.hpp"
 
 string DFAFileReader(const string fileName){
     ifstream f(fileName);
@@ -17,7 +18,7 @@ string DFAFileReader(const string fileName){
     return res;
 }
 
-void TokenPrinter(vector<Token> &tokens){
+void TokenPrinter(const vector<Token> &tokens){
     for(auto &t : tokens){
         if(t.value.empty()){
             cout << t.type << endl;
@@ -26,4 +27,8 @@ void TokenPrinter(vector<Token> &tokens){
             cout << t.type << "("<< t.value << ")" << endl;
         }
     }
+}
+
+void ErrorTokenMessage(const char token, const string after){
+    cerr << "[ERROR] Unidentfied Tokens : \"" << token << "\" after \""<< after << "\""<<endl;
 }
