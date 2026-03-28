@@ -12,7 +12,7 @@ string DFAFileReader(const string fileName){
 
     string res, tmp;
     while(getline(f,tmp)){
-        res += tmp;
+        res += tmp + '\n';
     }
 
     return res;

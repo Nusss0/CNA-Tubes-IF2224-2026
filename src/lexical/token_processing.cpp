@@ -1,9 +1,34 @@
-
 #include "token_processing.hpp"
 #include "../helpers/word_machine.hpp"
 
 map<string,string> keyword = {
-
+    {"NOT", "notsy"},
+    {"DIV", "idiv"},
+    {"MOD", "imod"},
+    {"AND", "andsy"},
+    {"OR", "orsy"},
+    {"CONST", "constsy"},
+    {"TYPE", "typesy"},
+    {"VAR", "varsy"},
+    {"FUNCTION", "functionsy"},
+    {"PROCEDURE", "proceduresy"},
+    {"ARRAY", "arraysy"},
+    {"RECORD", "recordsy"},
+    {"PROGRAM", "programsy"},
+    {"BEGIN", "beginsy"},
+    {"IF", "ifsy"},
+    {"CASE", "casey"},
+    {"REPEAT", "repeatsy"},
+    {"WHILE", "whilesy"},
+    {"FOR", "forsy"},
+    {"END", "endsy"},
+    {"ELSE", "elsesy"},
+    {"UNTIL", "untilsy"},
+    {"OF", "ofsy"},
+    {"DO", "dosy"},
+    {"TO", "tosy"},
+    {"DOWNTO", "downtosy"},
+    {"THEN", "thensy"},
 };
 
 enum class State{
@@ -53,13 +78,14 @@ vector<Token> Tokenizing(const string &raw){
                 idx++;
                 break;
             }
+
             //kalau c itu karakter a-z / A-Z / _ maka statenya itu word
-            // if(isalpha(c) || c == '_'){
-            //     currWord = c; //inisialisasi 
-            //     state = State::WORD; //lanjut proses di state WORD
-            //     idx++;
-            //     break;
-            // }
+            if(isalpha(c) || c == '_'){
+                currWord = c; //inisialisasi 
+                state = State::WORD; //lanjut proses di state WORD
+                idx++;
+                break;
+            }
             idx++;
             break;
         
@@ -140,17 +166,29 @@ vector<Token> Tokenizing(const string &raw){
             break;
         }
 
-        //state WORD
-        // case State::WORD :
-        //     //cek karakter
-        //     if(isalpha(c) || c=='_'){
-        //         currWord += c; //lanjut proses kata 
-        //         idx++;
-        //         break; //next char
-        //     }
-        //     else{ //proses kata selesai, cek keyword
-        //         continue;
-        //     }
+        //---------------------------------------------- STATE WORD ------------------------------------------
+        case State::WORD :
+            //cek karakter
+            if(isalpha(c) || c=='_'){
+                currWord += c; //lanjut proses kata 
+                idx++;
+                break; //next char
+            }
+            else{ //proses kata selesai, cek keyword
+
+                // uppercase currWord untuk case-insensitive lookup
+                string upper = currWord;
+                for (char &ch : upper) ch = toupper(ch);
+
+                if (keyword.count(upper)) { //Kalau berada di keyword, maka langsung push dan mapping
+                    tokens.push_back({keyword[upper], ""});
+                } 
+                else{
+                    tokens.push_back({"ident",currWord});
+                }
+                state = State::IDLE;
+                break;
+            }
 
 
         default:
