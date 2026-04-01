@@ -270,7 +270,8 @@ vector<Token> Tokenizing(const string &raw){
         //----------------------------------------- ESCAPE STATE ------------------------------------------
         case State::ESCAPE : 
         //Disini kondisi setelah char/string, jadi setelah menemukan ' kedua kalinya, akan masuk ke kondisi escape. Jika ditemukan ' lagi, maka akan dianggap sebagai 1 buah petik saja (escape character). Jika ditemukan selain ', lgsg EOF.
-        if (c == '\''){
+        if (c == '\''){//secondary ' (berarti sebelumnya esc)
+            currWord+='\'';
             idx++;
             state = State::STRING;
             break;
