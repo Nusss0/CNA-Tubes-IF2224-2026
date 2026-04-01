@@ -9,4 +9,3 @@ string DFAFileReader(const string fileName);
 
 
 void TokenPrinter(const vector<Token> &tokens);
-void ErrorTokenMessage(const char token, const string after);

@@ -28,7 +28,3 @@ void TokenPrinter(const vector<Token> &tokens){
         }
     }
 }
-
-void ErrorTokenMessage(const char token, const string after){
-    cerr << "[ERROR] Unidentfied Tokens : \"" << token << "\" after \""<< after << "\""<<endl;
-}
