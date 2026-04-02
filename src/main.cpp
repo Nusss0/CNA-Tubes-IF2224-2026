@@ -14,5 +14,5 @@ int main() {
    raw = DFAFileReader(path);
    vector<Token> tokens = Tokenizing(raw);
    TokenPrinter(tokens);
-   
+   PrintTokenToFile("test/M1/output.txt",tokens);
 }

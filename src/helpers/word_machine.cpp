@@ -28,3 +28,17 @@ void TokenPrinter(const vector<Token> &tokens){
         }
     }
 }
+
+void PrintTokenToFile(const string fileName, const vector<Token> &tokens){
+    ofstream file(fileName);
+    for(auto &t : tokens){
+        if(t.value.empty()){
+            file << t.type + "\n";
+        }
+        else{
+            file << t.type +  "("<< t.value << ")\n";
+        }
+    }
+
+    file.close();
+}
