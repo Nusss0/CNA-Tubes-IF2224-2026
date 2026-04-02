@@ -10,3 +10,4 @@ string DFAFileReader(const string fileName);
 
 void TokenPrinter(const vector<Token> &tokens);
 void PrintTokenToFile(const string fileName, const vector<Token> &tokens);
+bool IsFileExist(const string path);

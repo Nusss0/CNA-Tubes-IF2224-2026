@@ -1,4 +1,4 @@
-#include "word_machine.hpp"
+#include "file_helper.hpp"
 #include "../lexical/token_processing.hpp"
 
 string DFAFileReader(const string fileName){
@@ -41,4 +41,28 @@ void PrintTokenToFile(const string fileName, const vector<Token> &tokens){
     }
 
     file.close();
+}
+
+bool IsFileExist(const string path){
+    ifstream f(path);
+    char op;
+    bool restart = true;
+    if(f.good()){ //jika file name ditemukan
+        cout << "File Exist !!!\n";
+        while (restart){ //selama tidak return, akan terjebak di loop ini
+            cout << "Do you want to override it ? [Y/n]\n";
+            cin >> op;
+            if(op =='Y'||op=='y'){
+                return false; //asumsi file tidak ada, jadi kena override
+            }    
+            else if(op =='N'||op=='n'){
+                return true; //file ada jadi tidak boleh override
+            }
+            else{
+                cout << "[ERROR] : Unknown Option !!\n";
+            }
+        }
+    }  
+    //jika file tidak ditemukan
+    return false; //langsung return false
 }

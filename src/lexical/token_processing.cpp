@@ -1,5 +1,5 @@
 #include "token_processing.hpp"
-#include "../helpers/word_machine.hpp"
+#include "../helpers/file_helper.hpp"
 
 map<string,string> keyword = {
     {"NOT", "notsy"},
