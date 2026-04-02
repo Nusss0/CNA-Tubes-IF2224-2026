@@ -1,0 +1,11 @@
+comment( brace comment )
+comment( paren comment )
+beginsy
+endsy
+ifsy
+thensy
+whilesy
+forsy
+comment( mixed comment )
+comment( six seven )
+comment( inline { (* sevenn sixx )

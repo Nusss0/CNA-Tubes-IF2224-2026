@@ -1,0 +1,4 @@
+{ brace comment } (* paren comment *)
+BEGIN end If THEN while FOR
+{ mixed comment *) (* six seven }
+(* inline { (* sevenn sixx }

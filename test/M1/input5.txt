@@ -1,0 +1,4 @@
+'A' 'hello' 'it''s'
+= @#$^&*!?|\
+'unclosed
+a + b + -b - -5
