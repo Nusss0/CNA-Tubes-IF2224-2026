@@ -257,7 +257,7 @@ vector<Token> Tokenizing(const string &raw){
                 break;
             }
             else if(c == '\n' || c == '\0'){ //string tidak boleh multiline, langsung unknown
-                tokens.push_back({"unknown", currWord});
+                tokens.push_back({"unknown", "'" + currWord});//menambahkan ' diawal sebagai bagian dari unknown (karena di State string, petik di skip unutk)
                 currWord = "";
                 state = State::IDLE;
                 break;
@@ -461,5 +461,6 @@ vector<Token> Tokenizing(const string &raw){
     if(state != State::IDLE){
         tokens.push_back({"unknown", currWord});
     }
+
     return tokens;
 }
