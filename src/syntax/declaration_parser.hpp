@@ -24,7 +24,7 @@ private:
     const Token* peek(size_t offset = 0) const;
 
     // Cek apakah habis
-    bool isAtEnd() const;
+    bool end() const;
 
     // Cek tipe token skrg
     bool check(const string& type) const;
@@ -33,10 +33,10 @@ private:
     bool match(const string& type);
 
     // Geser posisi parser 1 token
-    const Token& advance();
+    const Token& next();
 
     // Ambil token yang terakhir digunakan
-    const Token& previous() const;
+    const Token& prev() const;
 
     // Ubah token jadi node parse tree
     NodePtr makeTokenNode(const Token& token) const;
