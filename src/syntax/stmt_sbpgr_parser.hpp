@@ -6,6 +6,7 @@
 class StatementSubprogramParser {
     public:
         // konstruktor
+        explicit StatementSubprogramParser() = default;
         explicit StatementSubprogramParser(const vector<Token> &tokens);
 
         // setter dan getter
@@ -36,6 +37,16 @@ class StatementSubprogramParser {
         NodePtr parseBlock();
         NodePtr parseFormalParameterList();
         NodePtr parseParameterGroup();
+
+        // method untuk parse eksternal
+        NodePtr parseCaseBlock();
+        NodePtr parseExpression();
+        NodePtr parseStatementList();
+        NodePtr parseConstant();
+        NodePtr parseDeclarationPart();
+        NodePtr parseCompoundStatement();
+        NodePtr parseIdentifierList();
+        NodePtr parseArrayType();
 
     private:
         // atribut
