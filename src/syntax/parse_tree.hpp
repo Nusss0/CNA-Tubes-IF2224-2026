@@ -11,7 +11,7 @@ struct ParseNode {
 using NodePtr = shared_ptr<ParseNode>;
 
 NodePtr makeNode(const string& label);
-void    addChild(const NodePtr& parent, const NodePtr& child);
+void addChild(const NodePtr& parent, const NodePtr& child);
 
 void printTree(const NodePtr& root);
 void saveTreeToFile(const NodePtr& root, const string& path);
