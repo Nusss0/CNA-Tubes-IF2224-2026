@@ -50,9 +50,6 @@ private:
     // Cek apakah token membentuk range (curr pos)
     bool isRangeAhead(size_t offset = 0) const;
 
-    // Cek apakah token valid (curr pos)
-    bool isTypeStart(size_t offset = 0) const;
-
     NodePtr parseProgramHeader(); // program header
     NodePtr parseConstDeclaration(); // const dec
     NodePtr parseTypeDeclaration(); // type dec
