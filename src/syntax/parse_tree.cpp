@@ -8,8 +8,7 @@ void addChild(const NodePtr& parent, const NodePtr& child) {
     if (child) parent->children.push_back(child);
 }
 
-static void printTreeImpl(const NodePtr& node, ostream& out,
-                          const string& prefix, bool isLast, bool isRoot) {
+static void printTreeImpl(const NodePtr& node, ostream& out, const string& prefix, bool isLast, bool isRoot) {
     if (!node) return;
 
     if (isRoot) {

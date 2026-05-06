@@ -44,4 +44,32 @@ int main() {
          cout << "[ERROR] Unknown Options !!\n"; //restart masih true, akan minta keputusan export file
       }
    }
+
+   // ---------------- Syntax Analysis (Recursive Descent) ----------------
+   cout << "\n=== Parse Tree ===\n";
+   Parser parser(tokens);
+   NodePtr root = parser.parseProgram();
+   if (root) printTree(root);
+   if (parser.hasError()) {
+      cout << "\n[INFO] Parsing finished with " << parser.getErrors().size()
+           << " syntax error(s).\n";
+   } else {
+      cout << "\n[INFO] Parsing finished successfully.\n";
+   }
+
+   cout << "Export parse tree to file ? [N/y]\n";
+   char op2;
+   cin >> op2;
+   if (op2 == 'Y' || op2 == 'y') {
+      bool retry = true;
+      while (retry) {
+         cout << "Input File Name : ";
+         cin >> fileName;
+         path = "test/M1/" + fileName;
+         if (!IsFileExist(path)) {
+            saveTreeToFile(root, path);
+            retry = false;
+         }
+      }
+   }
 }
