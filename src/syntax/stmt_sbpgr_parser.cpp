@@ -11,7 +11,7 @@ NodePtr StatementSubprogramParser::parseStatement() {
     if (t.type == "repeatsy")return parseRepeatStatement();
     if (t.type == "forsy")   return parseForStatement();
     if (t.type == "ident") {
-        // ident bisa assignment (x := ...) atau call (foo(...))
+        // ident bisa assignment (x := ...)
         Token nxt = peek(1);
         if (nxt.type == "lparent") return parseProcedureFunctionCall();
         if (nxt.type == "becomes" || nxt.type == "lbrack" || nxt.type == "period")
