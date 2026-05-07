@@ -1,0 +1,23 @@
+program AllDecl;
+
+const
+  X == 10;
+  PI == 3.14;
+
+type
+  T == integer;
+  R == record
+    a: integer;
+    b: real;
+  end;
+  M == (Jan, Feb, Mar);
+  A == array[1..10] of integer;
+
+var
+  a: T;
+  b: R;
+  c: M;
+  d: A;
+
+begin
+end.
