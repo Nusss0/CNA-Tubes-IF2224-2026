@@ -1,4 +1,6 @@
 #include "parser.hpp"
+#include "declaration_parser.hpp"
+#include "stmt_sbpgr_parser.hpp"
 
 Parser::Parser(const vector<Token>& toks)
     : tokens(toks), pos(0),
@@ -88,7 +90,7 @@ NodePtr Parser::parseProgram() {
 
     //program harus diakhiri '.'
     if (expect("period", "<program> (program must end with '.')")) {
-        addChild(root, makeNode("."));
+        addChild(root, makeNode("period"));
     }
 
     if (!isAtEnd()) reportError("Unexpected tokens after end of program");
@@ -121,12 +123,25 @@ NodePtr Parser::parseProgramHeader() {
 NodePtr Parser::parseDeclarationPart() {
     NodePtr node = makeNode("<declaration-part>");
 
-    //declaration diawali salah satu dari 5 keyword ini
-    while (check("constsy") || check("typesy") || check("varsy") || check("proceduresy") || check("functionsy")) {
-        int before = pos;
+    // gunakan DeclarationParser buat const, type, var
+    DeclarationParser declParser(tokens);
+    declParser.setPosition(pos);
+    NodePtr decls = declParser.parseDeclarationPart();
+    pos = declParser.getPosition();
+    if (decls && !decls->children.empty()) {
+        for (auto& child : decls->children) {
+            addChild(node, child);
+        }
+    }
+    if (!declParser.error().empty()) {
+        reportError(declParser.error());
+    }
+
+    // subprogram declarations (procedure/function)
+    while (check("proceduresy") || check("functionsy") || check("constsy") || check("typesy") || check("varsy")) {
         NodePtr d = parseDeclaration();
         if (d) addChild(node, d);
-        if (pos == before) break; //safety: cegah infinite loop kalau sub-parser ga maju
+        else break;
     }
 
     if (node->children.empty()) addChild(node, makeNode("(empty)"));
@@ -145,7 +160,7 @@ NodePtr Parser::parseCompoundStatement() {
     NodePtr list = parseStatementList();
     if (list) addChild(node, list);
 
-    if (expect("endsy", "<compound-statement>")) addChild(node, makeNode("END"));
+    if (expect("endsy", "<compound-statement>")) addChild(node, makeNode("endsy"));
     return node;
 }
 
@@ -157,11 +172,13 @@ NodePtr Parser::parseStatementList() {
 
     while (check("semicolon")) {
         advance();
-        addChild(node, makeNode(";"));
+        addChild(node, makeNode("semicolon"));
         if (check("endsy")) break; //trailing ';' sebelum END, stop
         NodePtr s2 = parseStatement();
         if (s2) addChild(node, s2);
     }
+
+    if (node->children.empty()) addChild(node, makeNode("(empty)"));
     return node;
 }
 

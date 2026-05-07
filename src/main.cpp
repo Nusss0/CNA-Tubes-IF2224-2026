@@ -29,6 +29,13 @@ int main() {
       string raw = DFAFileReader(path);
       tokens = Tokenizing(raw);
 
+      // filter token komentar biar parser ga perlu pusing
+      vector<Token> filtered;
+      for (const auto& t : tokens) {
+         if (t.type != "comment") filtered.push_back(t);
+      }
+      tokens.swap(filtered);
+
       TokenPrinter(tokens);
 
       char op;

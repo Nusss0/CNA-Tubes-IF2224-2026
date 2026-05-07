@@ -1,6 +1,4 @@
 #include "stmt_sbpgr_parser.hpp"
-#include "declaration_parser.hpp"
-#include "expression_parser.hpp"
 #include <iostream>
 
 StatementSubprogramParser::StatementSubprogramParser(const vector<Token>& tokens) {
@@ -30,37 +28,40 @@ void StatementSubprogramParser::setExprParser(ExpressionParser* p) {
 }
 
 NodePtr StatementSubprogramParser::parseStatement() {
-    NodePtr node = makeNode("statement");
     Token t = currentToken();
+    if (t.type == "beginsy") {
+        return parseCompoundStatement();
+    }
     if (t.type == "ifsy") {
-        addChild(node, parseIfStatement());
-    } 
-    else if (t.type == "casesy") {
-        addChild(node, parseCaseStatement());
-    } 
-    else if (t.type == "whilesy") {
-        addChild(node, parseWhileStatement());
-    } 
-    else if (t.type == "repeatsy") {
-        addChild(node, parseRepeatStatement());
-    } 
-    else if (t.type == "forsy") {
-        addChild(node, parseForStatement());
-    } 
-    else if (t.type == "ident") {
+        return parseIfStatement();
+    }
+    if (t.type == "casesy") {
+        return parseCaseStatement();
+    }
+    if (t.type == "whilesy") {
+        return parseWhileStatement();
+    }
+    if (t.type == "repeatsy") {
+        return parseRepeatStatement();
+    }
+    if (t.type == "forsy") {
+        return parseForStatement();
+    }
+    if (t.type == "ident") {
         Token next = peek();
         if (next.type == "lparent") {
-            addChild(node, parseProcedureFunctionCall());
-        } 
-        else {
-            addChild(node, parseAssignmentStatement());
+            return parseProcedureFunctionCall();
         }
+        if (next.type == "becomes" || next.type == "lbrack" || next.type == "period") {
+            return parseAssignmentStatement();
+        }
+        return parseProcedureFunctionCall();
     }
-    return node;
+    return nullptr;
 }
 
 NodePtr StatementSubprogramParser::parseAssignmentStatement() {
-    NodePtr node = makeNode("assignment-statement");
+    NodePtr node = makeNode("<assignment-statement>");
     addChild(node, parseVariable());
     if (matchType("becomes")) {
         addChild(node, makeNode("becomes"));
@@ -73,7 +74,7 @@ NodePtr StatementSubprogramParser::parseAssignmentStatement() {
 }
 
 NodePtr StatementSubprogramParser::parseIfStatement() {
-    NodePtr node = makeNode("if-statement");
+    NodePtr node = makeNode("<if-statement>");
     consume("ifsy", "Expected 'if'");
     addChild(node, makeNode("ifsy"));
     addChild(node, parseExpression());
@@ -89,7 +90,7 @@ NodePtr StatementSubprogramParser::parseIfStatement() {
 }
 
 NodePtr StatementSubprogramParser::parseCaseStatement() {
-    NodePtr node = makeNode("case-statement");
+    NodePtr node = makeNode("<case-statement>");
     consume("casesy", "Expected 'case'");
     addChild(node, makeNode("casesy"));
     addChild(node, parseExpression());
@@ -102,7 +103,7 @@ NodePtr StatementSubprogramParser::parseCaseStatement() {
 }
 
 NodePtr StatementSubprogramParser::parseCaseBlock() {
-    NodePtr node = makeNode("case-block");
+    NodePtr node = makeNode("<case-block>");
     addChild(node, parseConstant());
     while (currentToken().type == "comma") {
         consume("comma", "");
@@ -124,7 +125,7 @@ NodePtr StatementSubprogramParser::parseCaseBlock() {
 }
 
 NodePtr StatementSubprogramParser::parseWhileStatement() {
-    NodePtr node = makeNode("while-statement");
+    NodePtr node = makeNode("<while-statement>");
     consume("whilesy", "Expected 'while'");
     addChild(node, makeNode("whilesy"));
     addChild(node, parseExpression());
@@ -135,7 +136,7 @@ NodePtr StatementSubprogramParser::parseWhileStatement() {
 }
 
 NodePtr StatementSubprogramParser::parseRepeatStatement() {
-    NodePtr node = makeNode("repeat-statement");
+    NodePtr node = makeNode("<repeat-statement>");
     consume("repeatsy", "Expected 'repeat'");
     addChild(node, makeNode("repeatsy"));
     addChild(node, parseStatementList());
@@ -146,7 +147,7 @@ NodePtr StatementSubprogramParser::parseRepeatStatement() {
 }
 
 NodePtr StatementSubprogramParser::parseForStatement() {
-    NodePtr node = makeNode("for-statement");
+    NodePtr node = makeNode("<for-statement>");
     consume("forsy", "Expected 'for'");
     addChild(node, makeNode("forsy"));
     
@@ -176,27 +177,27 @@ NodePtr StatementSubprogramParser::parseForStatement() {
 }
 
 NodePtr StatementSubprogramParser::parseProcedureFunctionCall() {
-    NodePtr node = makeNode("procedure/function-call");
+    NodePtr node = makeNode("<procedure/function-call>");
     if (currentToken().type == "ident") {
         addChild(node, makeNode("ident(" + currentToken().value + ")"));
         advance();
     } 
     else consume("ident", "Expected identifier");
 
-    consume("lparent", "Expected '('");
-    addChild(node, makeNode("lparent"));
-    
-    if (currentToken().type != "rparent") {
-        addChild(node, parseParameterList());
+    if (currentToken().type == "lparent") {
+        advance();
+        addChild(node, makeNode("lparent"));
+        if (currentToken().type != "rparent") {
+            addChild(node, parseParameterList());
+        }
+        consume("rparent", "Expected ')'");
+        addChild(node, makeNode("rparent"));
     }
-    
-    consume("rparent", "Expected ')'");
-    addChild(node, makeNode("rparent"));
     return node;
 }
 
 NodePtr StatementSubprogramParser::parseParameterList() {
-    NodePtr node = makeNode("parameter-list");
+    NodePtr node = makeNode("<parameter-list>");
     addChild(node, parseExpression());
     while (currentToken().type == "comma") {
         consume("comma", "");
@@ -207,7 +208,7 @@ NodePtr StatementSubprogramParser::parseParameterList() {
 }
 
 NodePtr StatementSubprogramParser::parseVariable() {
-    NodePtr node = makeNode("variable");
+    NodePtr node = makeNode("<variable>");
     if (currentToken().type == "ident") {
         addChild(node, makeNode("ident(" + currentToken().value + ")"));
         advance();
@@ -221,7 +222,7 @@ NodePtr StatementSubprogramParser::parseVariable() {
 }
 
 NodePtr StatementSubprogramParser::parseComponentVariable() {
-    NodePtr node = makeNode("component-variable");
+    NodePtr node = makeNode("<component-variable>");
     if (currentToken().type == "lbrack") {
         consume("lbrack", "");
         addChild(node, makeNode("lbrack"));
@@ -245,7 +246,7 @@ NodePtr StatementSubprogramParser::parseComponentVariable() {
 }
 
 NodePtr StatementSubprogramParser::parseIndexList() {
-    NodePtr node = makeNode("index-list");
+    NodePtr node = makeNode("<index-list>");
     Token t = currentToken();
     if (t.type == "intcon" || t.type == "charcon" || t.type == "ident") {
         if (t.value != "") addChild(node, makeNode(t.type + "(" + t.value + ")"));
@@ -265,7 +266,7 @@ NodePtr StatementSubprogramParser::parseIndexList() {
 }
 
 NodePtr StatementSubprogramParser::parseSubprogramDeclaration() {
-    NodePtr node = makeNode("subprogram-declaration");
+    NodePtr node = makeNode("<subprogram-declaration>");
     if (currentToken().type == "proceduresy") {
         addChild(node, parseProcedureDeclaration());
     } 
@@ -279,7 +280,7 @@ NodePtr StatementSubprogramParser::parseSubprogramDeclaration() {
 }
 
 NodePtr StatementSubprogramParser::parseProcedureDeclaration() {
-    NodePtr node = makeNode("procedure-declaration");
+    NodePtr node = makeNode("<procedure-declaration>");
     consume("proceduresy", "Expected 'procedure'");
     addChild(node, makeNode("proceduresy"));
     
@@ -304,7 +305,7 @@ NodePtr StatementSubprogramParser::parseProcedureDeclaration() {
 }
 
 NodePtr StatementSubprogramParser::parseFunctionDeclaration() {
-    NodePtr node = makeNode("function-declaration");
+    NodePtr node = makeNode("<function-declaration>");
     consume("functionsy", "Expected 'function'");
     addChild(node, makeNode("functionsy"));
     
@@ -338,14 +339,17 @@ NodePtr StatementSubprogramParser::parseFunctionDeclaration() {
 }
 
 NodePtr StatementSubprogramParser::parseBlock() {
-    NodePtr node = makeNode("block");
+    NodePtr node = makeNode("<block>");
     addChild(node, parseDeclarationPart());
+    while (currentToken().type == "proceduresy" || currentToken().type == "functionsy") {
+        addChild(node, parseSubprogramDeclaration());
+    }
     addChild(node, parseCompoundStatement());
     return node;
 }
 
 NodePtr StatementSubprogramParser::parseFormalParameterList() {
-    NodePtr node = makeNode("formal-parameter-list");
+    NodePtr node = makeNode("<formal-parameter-list>");
     consume("lparent", "Expected '('");
     addChild(node, makeNode("lparent"));
     
@@ -363,7 +367,7 @@ NodePtr StatementSubprogramParser::parseFormalParameterList() {
 }
 
 NodePtr StatementSubprogramParser::parseParameterGroup() {
-    NodePtr node = makeNode("parameter-group");
+    NodePtr node = makeNode("<parameter-group>");
     addChild(node, parseIdentifierList());
     
     consume("colon", "Expected ':'");
@@ -384,72 +388,38 @@ NodePtr StatementSubprogramParser::parseParameterGroup() {
 }
 
 NodePtr StatementSubprogramParser::parseExpression() {
-    if (!exprParser_) return makeNode("expression");
-    exprParser_->setPosition(pos);
-    NodePtr n = exprParser_->parseExpression();
-    pos = exprParser_->getPosition();
-    return n;
-}
-
-NodePtr StatementSubprogramParser::parseConstant() {
-    if (!declParser_) return makeNode("constant");
-    declParser_->setPosition(pos);
-    NodePtr n = declParser_->parseConstant();
-    pos = declParser_->getPosition();
-    return n;
-}
-
-NodePtr StatementSubprogramParser::parseDeclarationPart() {
-    if (!declParser_) return makeNode("declaration-part");
-    declParser_->setPosition(pos);
-    NodePtr n = declParser_->parseDeclarationPart();
-    pos = declParser_->getPosition();
-    return n;
-}
-
-NodePtr StatementSubprogramParser::parseIdentifierList() {
-    if (!declParser_) return makeNode("identifier-list");
-    declParser_->setPosition(pos);
-    NodePtr n = declParser_->parseIdentifierList();
-    pos = declParser_->getPosition();
-    return n;
-}
-
-NodePtr StatementSubprogramParser::parseArrayType() {
-    if (!declParser_) return makeNode("array-type");
-    declParser_->setPosition(pos);
-    NodePtr n = declParser_->parseArrayType();
-    pos = declParser_->getPosition();
-    return n;
+    // placeholder untuk parser expression
+    return makeNode("expression");
 }
 
 NodePtr StatementSubprogramParser::parseStatementList() {
-    NodePtr node = makeNode("statement-list");
-    size_t before = pos;
-    addChild(node, parseStatement());
-    if (pos == before && !isAtEnd() && currentToken().type != "semicolon") {
-        // parseStatement gagal maju di token tak dikenal -> hindari infinite loop
-        return node;
-    }
-    while (currentToken().type == "semicolon") {
-        consume("semicolon", "");
-        addChild(node, makeNode("semicolon"));
-        if (currentToken().type == "endsy" || currentToken().type == "untilsy" || isAtEnd()) break;
-        size_t b = pos;
-        addChild(node, parseStatement());
-        if (pos == b && currentToken().type != "semicolon") break;
-    }
-    return node;
+    // placeholder untuk parser statement list
+    return makeNode("statement-list");
+}
+
+NodePtr StatementSubprogramParser::parseConstant() {
+    // placeholder untuk parser constant
+    return makeNode("constant");
+}
+
+NodePtr StatementSubprogramParser::parseDeclarationPart() {
+    // placeholder untuk parser declaration part
+    return makeNode("declaration-part");
 }
 
 NodePtr StatementSubprogramParser::parseCompoundStatement() {
-    NodePtr node = makeNode("compound-statement");
-    consume("beginsy", "Expected 'begin'");
-    addChild(node, makeNode("beginsy"));
-    addChild(node, parseStatementList());
-    consume("endsy", "Expected 'end'");
-    addChild(node, makeNode("endsy"));
-    return node;
+    // placeholder untuk parser compound statement
+    return makeNode("compound-statement");
+}
+
+NodePtr StatementSubprogramParser::parseIdentifierList() {
+    // placeholder untuk parser identifier list
+    return makeNode("identifier-list");
+}
+
+NodePtr StatementSubprogramParser::parseArrayType() {
+    // placeholder untuk parser array type
+    return makeNode("array-type");
 }
 
 Token StatementSubprogramParser::currentToken() const {

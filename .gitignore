@@ -9,3 +9,6 @@ bin/
 # OS
 .DS_Store
 Thumbs.db
+
+#Testing folder
+test

@@ -111,14 +111,15 @@ NodePtr DeclarationParser::parseDeclarationPart() {
 
         if (check("typesy")) {
             addChild(root, parseTypeDeclaration());
+        } else if (check("varsy")) {
+            addChild(root, parseVarDeclaration());
+        } else {
+            // token lain (misal proceduresy/functionsy), stop parsing declarations
+            break;
         }
 
         if (!errorMessage.empty()){
             return root;
-        }
-
-        if (check("varsy")) {
-            addChild(root, parseVarDeclaration());
         }
 
         // safety: kalau tidak ada progress (token bukan const/type/var/begin), keluar

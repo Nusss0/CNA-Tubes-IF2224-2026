@@ -21,6 +21,9 @@ class ExpressionParser {
         NodePtr parseFactor();
 
     private:
+        NodePtr parseVariable();
+        NodePtr parseProcedureFunctionCall();
+        NodePtr parseIndexList();
         // atribut
         vector<Token> tokens;
         size_t pos = 0;
