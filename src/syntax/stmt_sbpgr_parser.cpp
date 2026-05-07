@@ -59,6 +59,12 @@ NodePtr StatementSubprogramParser::parseStatement() {
         }
         return parseProcedureFunctionCall();
     }
+    //empty statement (sblm ; / END / UNTIL / EOF) ga dianggap error
+    if (t.type == "semicolon" || t.type == "endsy" || t.type == "untilsy" || t.type == "elsesy" || isAtEnd()) {
+        return nullptr;
+    }
+    //token bener2 ga dikenali, catat error biar Parser tau
+    if (errorMessage.empty()) errorMessage = "unexpected token at start of statement: " + t.type;
     return nullptr;
 }
 
@@ -391,9 +397,11 @@ NodePtr StatementSubprogramParser::parseParameterGroup() {
 
 NodePtr StatementSubprogramParser::parseExpression() {
     if (!exprParser_) return makeNode("<expression>");
+    exprParser_->clearError();
     exprParser_->setPosition(pos);
     NodePtr n = exprParser_->parseExpression();
     pos = exprParser_->getPosition();
+    if (exprParser_->hasError() && errorMessage.empty()) errorMessage = exprParser_->error();
     return n;
 }
 
@@ -497,11 +505,17 @@ bool StatementSubprogramParser::matchValue(const string& value) {
     return false;
 }
 
-void StatementSubprogramParser::consume(const string& expectedType, const string& errorMessage) {
+void StatementSubprogramParser::consume(const string& expectedType, const string& errMsg) {
     if (currentToken().type == expectedType) {
         advance();
-    } 
-    else {
-        cout << "[ERROR] " << errorMessage << " - Expected token type: " << expectedType << " but got " << currentToken().type << "\n";
+        return;
+    }
+    //simpan error pertama biar Parser bisa baca via error()
+    if (errorMessage.empty()) {
+        errorMessage = errMsg.empty() ? ("expected token type: " + expectedType + " but got " + currentToken().type) : (errMsg + " (got " + currentToken().type + ")");
     }
 }
+
+const string& StatementSubprogramParser::error() const { return errorMessage; }
+bool StatementSubprogramParser::hasError() const { return !errorMessage.empty(); }
+void StatementSubprogramParser::clearError() { errorMessage.clear(); }

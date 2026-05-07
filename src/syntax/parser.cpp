@@ -89,7 +89,7 @@ NodePtr Parser::parseProgram() {
     if (compound) addChild(root, compound);
 
     //program harus diakhiri '.'
-    if (expect("period", "<program> (program must end with '.')")) {
+    if (expect("period", "<program>")) {
         addChild(root, makeNode("period"));
     }
 
@@ -102,8 +102,7 @@ NodePtr Parser::parseProgramHeader() {
     NodePtr node = makeNode("<program-header>");
 
     if (!expect("programsy", "<program-header>")) {
-        //lompat ke section keyword / BEGIN biar parser ga macet
-        synchronize({"semicolon", "varsy", "constsy", "typesy", "proceduresy", "functionsy", "beginsy"});
+        //ga ada keyword PROGRAM, kembaliin node kosong dan biar caller lanjut
         return node;
     }
     addChild(node, makeNode("programsy"));
@@ -123,11 +122,10 @@ NodePtr Parser::parseProgramHeader() {
 NodePtr Parser::parseDeclarationPart() {
     NodePtr node = makeNode("<declaration-part>");
 
-    // gunakan DeclarationParser buat const, type, var
-    DeclarationParser declParser(tokens);
-    declParser.setPosition(pos);
+    //const/type/var pertama, urut sesuai grammar
+    declParser.setPosition((size_t)pos);
     NodePtr decls = declParser.parseDeclarationPart();
-    pos = declParser.getPosition();
+    pos = (int)declParser.getPosition();
     if (decls && !decls->children.empty()) {
         for (auto& child : decls->children) {
             addChild(node, child);
@@ -137,14 +135,13 @@ NodePtr Parser::parseDeclarationPart() {
         reportError(declParser.error());
     }
 
-    // subprogram declarations (procedure/function)
-    while (check("proceduresy") || check("functionsy") || check("constsy") || check("typesy") || check("varsy")) {
+    //subprogram (procedure/function) hanya boleh setelah const/type/var
+    while (check("proceduresy") || check("functionsy")) {
         NodePtr d = parseDeclaration();
         if (d) addChild(node, d);
         else break;
     }
 
-    if (node->children.empty()) addChild(node, makeNode("(empty)"));
     return node;
 }
 
@@ -168,69 +165,58 @@ NodePtr Parser::parseStatementList() {
     NodePtr node = makeNode("<statement-list>");
 
     NodePtr s = parseStatement();
-    if (s) addChild(node, s);
+    addChild(node, s);
 
     while (check("semicolon")) {
         advance();
         addChild(node, makeNode("semicolon"));
         if (check("endsy")) break; //trailing ';' sebelum END, stop
         NodePtr s2 = parseStatement();
-        if (s2) addChild(node, s2);
+        addChild(node, s2);
     }
 
-    if (node->children.empty()) addChild(node, makeNode("(empty)"));
     return node;
 }
 
 //---- delegated to sub-parsers ----
 
 NodePtr Parser::parseDeclaration() {
-    NodePtr node = makeNode("<declaration>");
-
+    //skrg cuma dipanggil dari subprogram-loop, jadi cuma proc/func
     const string& head = peek().type;
-    NodePtr inner;
-
-    if (head == "constsy" || head == "typesy" || head == "varsy") {
-        declParser.setPosition((size_t)pos);
-        if (head == "constsy")      inner = declParser.parseConstDeclaration();
-        else if (head == "typesy")  inner = declParser.parseTypeDeclaration();
-        else                        inner = declParser.parseVarDeclaration();
-        pos = (int)declParser.getPosition();
-        if (!declParser.error().empty()) {
-            reportError(declParser.error());
-        }
-    } else if (head == "proceduresy" || head == "functionsy") {
-        stmtParser.setPosition((size_t)pos);
-        inner = stmtParser.parseSubprogramDeclaration();
-        pos = (int)stmtParser.getPosition();
-    } else {
-        reportError("Expected declaration keyword in <declaration>");
+    if (head != "proceduresy" && head != "functionsy") {
+        reportError("Expected 'procedure' or 'function' in <declaration>");
         advance();
-        return node;
+        return nullptr;
     }
 
-    if (inner) addChild(node, inner);
-    return node;
+    stmtParser.clearError();
+    stmtParser.setPosition((size_t)pos);
+    NodePtr inner = stmtParser.parseSubprogramDeclaration();
+    pos = (int)stmtParser.getPosition();
+    if (stmtParser.hasError()) reportError(stmtParser.error());
+    return inner;
 }
 
 NodePtr Parser::parseStatement() {
-    NodePtr node = makeNode("<statement>");
-
-    if (check("endsy") || check("semicolon") || isAtEnd()) {
-        addChild(node, makeNode("(empty)"));
-        return node;
+    //statement boleh kosong (ε), tetap bikin node biar tree konsisten
+    if (check("endsy") || check("semicolon") || check("elsesy") || check("untilsy") || isAtEnd()) {
+        return makeNode("<empty-statement>");
     }
 
     if (check("beginsy")) {
-        //compound statement bersarang
-        NodePtr inner = parseCompoundStatement();
-        if (inner) addChild(node, inner);
-        return node;
+        return parseCompoundStatement();
     }
 
+    int before = pos;
+    stmtParser.clearError();
     stmtParser.setPosition((size_t)pos);
     NodePtr inner = stmtParser.parseStatement();
     pos = (int)stmtParser.getPosition();
-    if (inner) addChild(node, inner);
-    return node;
+    if (stmtParser.hasError()) reportError(stmtParser.error());
+    //jaga2: kalau ga ada progress dan ga ada error, paksa error + advance biar ga deadlock
+    if (pos == before && !inner && !stmtParser.hasError()) {
+        reportError("Could not parse statement at " + tokenDisplay(peek()));
+        advance();
+    }
+    return inner;
 }

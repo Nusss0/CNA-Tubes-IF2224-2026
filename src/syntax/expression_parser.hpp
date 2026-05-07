@@ -14,6 +14,11 @@ class ExpressionParser {
         void setPosition(size_t pos);
         size_t getPosition() const;
 
+        // error-state API (sama dgn stmtParser/declParser)
+        const string& error() const;
+        bool hasError() const;
+        void clearError();
+
         // parser untuk statements
         NodePtr parseExpression();
         NodePtr parseSimpleExpression();
@@ -27,6 +32,7 @@ class ExpressionParser {
         // atribut
         vector<Token> tokens;
         size_t pos = 0;
+        string errorMessage;
 
         // helper untuk mengecek token
         Token currentToken() const;

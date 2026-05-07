@@ -21,6 +21,11 @@ class StatementSubprogramParser {
         void setDeclParser(DeclarationParser* p);
         void setExprParser(ExpressionParser* p);
 
+        // error-state API (dibaca sm Parser utk gabungin ke error vector global)
+        const string& error() const;
+        bool hasError() const;
+        void clearError();
+
         // parser untuk statements
         NodePtr parseStatement();
         NodePtr parseAssignmentStatement();
@@ -63,6 +68,8 @@ class StatementSubprogramParser {
         // peer parsers (non-owning)
         DeclarationParser* declParser_ = nullptr;
         ExpressionParser* exprParser_ = nullptr;
+
+        string errorMessage;
 
         // helper untuk mengecek token
         Token currentToken() const;

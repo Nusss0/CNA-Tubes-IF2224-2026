@@ -46,7 +46,7 @@ NodePtr ExpressionParser::parseFactor(){
         addChild(node, makeNode("notsy"));
         addChild(node, parseFactor());
     } else {
-        cout << "[ERROR] Unexpected token: " << t.type << " with value: " << t.value << "\n";
+        if (errorMessage.empty()) errorMessage = "unexpected token in <factor>: " + t.type;
     }
     return node;
 }
@@ -201,10 +201,16 @@ bool ExpressionParser::matchValue(const string& value) {
     return false;
 }
 
-void ExpressionParser::consume(const string& expectedType, const string& errorMessage) {
+void ExpressionParser::consume(const string& expectedType, const string& errMsg) {
     if (currentToken().type == expectedType) {
         advance();
-    } else {
-        cout << "[ERROR] " << errorMessage << " - Expected token type: " << expectedType << " but got " << currentToken().type << "\n";
+        return;
+    }
+    if (errorMessage.empty()) {
+        errorMessage = errMsg.empty() ? ("expected token type: " + expectedType + " but got " + currentToken().type) : (errMsg + " (got " + currentToken().type + ")");
     }
 }
+
+const string& ExpressionParser::error() const { return errorMessage; }
+bool ExpressionParser::hasError() const { return !errorMessage.empty(); }
+void ExpressionParser::clearError() { errorMessage.clear(); }

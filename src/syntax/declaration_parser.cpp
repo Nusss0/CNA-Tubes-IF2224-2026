@@ -153,6 +153,7 @@ NodePtr DeclarationParser::parseProgramHeader() {
 }
 
 NodePtr DeclarationParser::parseConstDeclaration() {
+    errorMessage.clear();
     auto node = makeNode("<const-declaration>");
 
     if (!match("constsy")) {
@@ -190,6 +191,7 @@ NodePtr DeclarationParser::parseConstDeclaration() {
 }
 
 NodePtr DeclarationParser::parseTypeDeclaration() {
+    errorMessage.clear();
     auto node = makeNode("<type-declaration>");
 
     if (!match("typesy")) {
@@ -227,6 +229,7 @@ NodePtr DeclarationParser::parseTypeDeclaration() {
 }
 
 NodePtr DeclarationParser::parseVarDeclaration() {
+    errorMessage.clear();
     auto node = makeNode("<var-declaration>");
 
     if (!match("varsy")) {
@@ -264,6 +267,7 @@ NodePtr DeclarationParser::parseVarDeclaration() {
 }
 
 NodePtr DeclarationParser::parseIdentifierList() {
+    errorMessage.clear();
     auto node = makeNode("<identifier-list>");
 
     if (!check("ident")) {
@@ -318,6 +322,7 @@ NodePtr DeclarationParser::parseType() {
 }
 
 NodePtr DeclarationParser::parseArrayType() {
+    errorMessage.clear();
     auto node = makeNode("<array-type>");
 
     if (!match("arraysy")) {
@@ -467,6 +472,7 @@ NodePtr DeclarationParser::parseFieldPart() {
 }
 
 NodePtr DeclarationParser::parseConstant() {
+    errorMessage.clear();
     auto node = makeNode("<constant>");
 
     if (check("charcon") || check("string")) {
