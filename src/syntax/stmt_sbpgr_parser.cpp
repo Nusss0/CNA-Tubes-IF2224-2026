@@ -1,69 +1,28 @@
 #include "stmt_sbpgr_parser.hpp"
 #include "declaration_parser.hpp"
 #include "expression_parser.hpp"
-#include <iostream>
-
-StatementSubprogramParser::StatementSubprogramParser(const vector<Token>& tokens) {
-    this->tokens = tokens;
-    this->pos = 0;
-}
-
-void StatementSubprogramParser::setTokens(const vector<Token>& tokens) {
-    this->tokens = tokens;
-    this->pos = 0;
-}
-
-void StatementSubprogramParser::setPosition(size_t pos) {
-    this->pos = pos;
-}
-
-size_t StatementSubprogramParser::getPosition() const {
-    return pos;
-}
-
-void StatementSubprogramParser::setDeclParser(DeclarationParser* p) {
-    declParser_ = p;
-}
-
-void StatementSubprogramParser::setExprParser(ExpressionParser* p) {
-    exprParser_ = p;
-}
 
 NodePtr StatementSubprogramParser::parseStatement() {
-    Token t = currentToken();
-    if (t.type == "beginsy") {
-        return parseCompoundStatement();
-    }
-    if (t.type == "ifsy") {
-        return parseIfStatement();
-    }
-    if (t.type == "casesy") {
-        return parseCaseStatement();
-    }
-    if (t.type == "whilesy") {
-        return parseWhileStatement();
-    }
-    if (t.type == "repeatsy") {
-        return parseRepeatStatement();
-    }
-    if (t.type == "forsy") {
-        return parseForStatement();
-    }
+    Token t = peek();
+    if (t.type == "beginsy") return parseCompoundStatement();
+    if (t.type == "ifsy")    return parseIfStatement();
+    if (t.type == "casesy")  return parseCaseStatement();
+    if (t.type == "whilesy") return parseWhileStatement();
+    if (t.type == "repeatsy")return parseRepeatStatement();
+    if (t.type == "forsy")   return parseForStatement();
     if (t.type == "ident") {
-        Token next = peek();
-        if (next.type == "lparent") {
-            return parseProcedureFunctionCall();
-        }
-        if (next.type == "becomes" || next.type == "lbrack" || next.type == "period") {
+        // ident bisa assignment (x := ...) atau call (foo(...))
+        Token nxt = peek(1);
+        if (nxt.type == "lparent") return parseProcedureFunctionCall();
+        if (nxt.type == "becomes" || nxt.type == "lbrack" || nxt.type == "period")
             return parseAssignmentStatement();
-        }
         return parseProcedureFunctionCall();
     }
-    //empty statement (sblm ; / END / UNTIL / EOF) ga dianggap error
+    // empty statement (sblm ; / END / UNTIL / ELSE / EOF) ga dianggap error
     if (t.type == "semicolon" || t.type == "endsy" || t.type == "untilsy" || t.type == "elsesy" || isAtEnd()) {
         return nullptr;
     }
-    //token bener2 ga dikenali, catat error biar Parser tau
+    // token bener2 ga dikenali, catat error biar Parser utama tau
     if (errorMessage.empty()) errorMessage = "unexpected token at start of statement: " + t.type;
     return nullptr;
 }
@@ -71,10 +30,10 @@ NodePtr StatementSubprogramParser::parseStatement() {
 NodePtr StatementSubprogramParser::parseAssignmentStatement() {
     NodePtr node = makeNode("<assignment-statement>");
     // kalau ident sederhana (ga ada [ atau .), langsung ident tanpa <variable>
-    if (currentToken().type == "ident") {
-        Token nxt = peek();
+    if (check("ident")) {
+        Token nxt = peek(1);
         if (nxt.type != "lbrack" && nxt.type != "period") {
-            addChild(node, makeNode("ident(" + currentToken().value + ")"));
+            addChild(node, makeNode("ident(" + peek().value + ")"));
             advance();
         } else {
             addChild(node, parseVariable());
@@ -82,10 +41,10 @@ NodePtr StatementSubprogramParser::parseAssignmentStatement() {
     } else {
         addChild(node, parseVariable());
     }
-    if (matchType("becomes")) {
+    if (match("becomes")) {
         addChild(node, makeNode("becomes"));
     } else {
-        consume("becomes", "Expected ':='");
+        consume("becomes", "<assignment-statement>");
     }
     addChild(node, parseExpression());
     return node;
@@ -93,14 +52,14 @@ NodePtr StatementSubprogramParser::parseAssignmentStatement() {
 
 NodePtr StatementSubprogramParser::parseIfStatement() {
     NodePtr node = makeNode("<if-statement>");
-    consume("ifsy", "Expected 'if'");
+    consume("ifsy", "<if-statement>");
     addChild(node, makeNode("ifsy"));
     addChild(node, parseExpression());
-    consume("thensy", "Expected 'then'");
+    consume("thensy", "<if-statement>");
     addChild(node, makeNode("thensy"));
     addChild(node, parseStatement());
-    if (currentToken().type == "elsesy") {
-        consume("elsesy", "");
+    if (check("elsesy")) {
+        advance();
         addChild(node, makeNode("elsesy"));
         addChild(node, parseStatement());
     }
@@ -109,13 +68,13 @@ NodePtr StatementSubprogramParser::parseIfStatement() {
 
 NodePtr StatementSubprogramParser::parseCaseStatement() {
     NodePtr node = makeNode("<case-statement>");
-    consume("casesy", "Expected 'case'");
+    consume("casesy", "<case-statement>");
     addChild(node, makeNode("casesy"));
     addChild(node, parseExpression());
-    consume("ofsy", "Expected 'of'");
+    consume("ofsy", "<case-statement>");
     addChild(node, makeNode("ofsy"));
     addChild(node, parseCaseBlock());
-    consume("endsy", "Expected 'end'");
+    consume("endsy", "<case-statement>");
     addChild(node, makeNode("endsy"));
     return node;
 }
@@ -123,18 +82,18 @@ NodePtr StatementSubprogramParser::parseCaseStatement() {
 NodePtr StatementSubprogramParser::parseCaseBlock() {
     NodePtr node = makeNode("<case-block>");
     addChild(node, parseConstant());
-    while (currentToken().type == "comma") {
-        consume("comma", "");
+    while (check("comma")) {
+        advance();
         addChild(node, makeNode("comma"));
         addChild(node, parseConstant());
     }
-    consume("colon", "Expected ':'");
+    consume("colon", "<case-block>");
     addChild(node, makeNode("colon"));
     addChild(node, parseStatement());
-    while (currentToken().type == "semicolon") {
-        consume("semicolon", "");
+    while (check("semicolon")) {
+        advance();
         addChild(node, makeNode("semicolon"));
-        Token t = currentToken();
+        Token t = peek();
         if (t.type == "intcon" || t.type == "realcon" || t.type == "charcon" || t.type == "string" || t.type == "plus" || t.type == "minus" || t.type == "ident") {
             addChild(node, parseCaseBlock());
         }
@@ -144,10 +103,10 @@ NodePtr StatementSubprogramParser::parseCaseBlock() {
 
 NodePtr StatementSubprogramParser::parseWhileStatement() {
     NodePtr node = makeNode("<while-statement>");
-    consume("whilesy", "Expected 'while'");
+    consume("whilesy", "<while-statement>");
     addChild(node, makeNode("whilesy"));
     addChild(node, parseExpression());
-    consume("dosy", "Expected 'do'");
+    consume("dosy", "<while-statement>");
     addChild(node, makeNode("dosy"));
     addChild(node, parseStatement());
     return node;
@@ -155,10 +114,10 @@ NodePtr StatementSubprogramParser::parseWhileStatement() {
 
 NodePtr StatementSubprogramParser::parseRepeatStatement() {
     NodePtr node = makeNode("<repeat-statement>");
-    consume("repeatsy", "Expected 'repeat'");
+    consume("repeatsy", "<repeat-statement>");
     addChild(node, makeNode("repeatsy"));
     addChild(node, parseStatementList());
-    consume("untilsy", "Expected 'until'");
+    consume("untilsy", "<repeat-statement>");
     addChild(node, makeNode("untilsy"));
     addChild(node, parseExpression());
     return node;
@@ -166,29 +125,27 @@ NodePtr StatementSubprogramParser::parseRepeatStatement() {
 
 NodePtr StatementSubprogramParser::parseForStatement() {
     NodePtr node = makeNode("<for-statement>");
-    consume("forsy", "Expected 'for'");
+    consume("forsy", "<for-statement>");
     addChild(node, makeNode("forsy"));
-    
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
-        advance();
-    } 
-    else consume("ident", "Expected identifier");
 
-    consume("becomes", "Expected ':='");
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
+        advance();
+    } else consume("ident", "<for-statement>");
+
+    consume("becomes", "<for-statement>");
     addChild(node, makeNode("becomes"));
     addChild(node, parseExpression());
 
-    if (currentToken().type == "tosy" || currentToken().type == "downtosy") {
-        addChild(node, makeNode(currentToken().type));
+    if (check("tosy") || check("downtosy")) {
+        addChild(node, makeNode(peek().type));
         advance();
-    } 
-    else {
-        consume("tosy", "Expected 'to' or 'downto'");
+    } else {
+        consume("tosy", "<for-statement>");
     }
 
     addChild(node, parseExpression());
-    consume("dosy", "Expected 'do'");
+    consume("dosy", "<for-statement>");
     addChild(node, makeNode("dosy"));
     addChild(node, parseStatement());
     return node;
@@ -196,19 +153,18 @@ NodePtr StatementSubprogramParser::parseForStatement() {
 
 NodePtr StatementSubprogramParser::parseProcedureFunctionCall() {
     NodePtr node = makeNode("<procedure/function-call>");
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
-    } 
-    else consume("ident", "Expected identifier");
+    } else consume("ident", "<procedure/function-call>");
 
-    if (currentToken().type == "lparent") {
+    if (check("lparent")) {
         advance();
         addChild(node, makeNode("lparent"));
-        if (currentToken().type != "rparent") {
+        if (!check("rparent")) {
             addChild(node, parseParameterList());
         }
-        consume("rparent", "Expected ')'");
+        consume("rparent", "<procedure/function-call>");
         addChild(node, makeNode("rparent"));
     }
     return node;
@@ -217,8 +173,8 @@ NodePtr StatementSubprogramParser::parseProcedureFunctionCall() {
 NodePtr StatementSubprogramParser::parseParameterList() {
     NodePtr node = makeNode("<parameter-list>");
     addChild(node, parseExpression());
-    while (currentToken().type == "comma") {
-        consume("comma", "");
+    while (check("comma")) {
+        advance();
         addChild(node, makeNode("comma"));
         addChild(node, parseExpression());
     }
@@ -227,13 +183,12 @@ NodePtr StatementSubprogramParser::parseParameterList() {
 
 NodePtr StatementSubprogramParser::parseVariable() {
     NodePtr node = makeNode("<variable>");
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
-    } 
-    else consume("ident", "Expected identifier");
+    } else consume("ident", "<variable>");
 
-    while (currentToken().type == "lbrack" || currentToken().type == "period") {
+    while (check("lbrack") || check("period")) {
         addChild(node, parseComponentVariable());
     }
     return node;
@@ -241,44 +196,40 @@ NodePtr StatementSubprogramParser::parseVariable() {
 
 NodePtr StatementSubprogramParser::parseComponentVariable() {
     NodePtr node = makeNode("<component-variable>");
-    if (currentToken().type == "lbrack") {
-        consume("lbrack", "");
+    if (check("lbrack")) {
+        advance();
         addChild(node, makeNode("lbrack"));
         addChild(node, parseIndexList());
-        consume("rbrack", "Expected ']'");
+        consume("rbrack", "<component-variable>");
         addChild(node, makeNode("rbrack"));
-    } 
-    else if (currentToken().type == "period") {
-        consume("period", "");
+    } else if (check("period")) {
+        advance();
         addChild(node, makeNode("period"));
-        if (currentToken().type == "ident") {
-            addChild(node, makeNode("ident(" + currentToken().value + ")"));
+        if (check("ident")) {
+            addChild(node, makeNode("ident(" + peek().value + ")"));
             advance();
-        } 
-        else consume("ident", "Expected identifier");
-    } 
-    else {
-        consume("lbrack", "Expected '[' or '.'");
+        } else consume("ident", "<component-variable>");
+    } else {
+        consume("lbrack", "<component-variable>");
     }
     return node;
 }
 
 NodePtr StatementSubprogramParser::parseIndexList() {
     NodePtr node = makeNode("<index-list>");
-    Token t = currentToken();
+    Token t = peek();
     if (t.type == "intcon" || t.type == "charcon" || t.type == "ident") {
         string label = t.type;
         if (t.type == "charcon") label += "('" + t.value + "')";
         else if (!t.value.empty()) label += "(" + t.value + ")";
         addChild(node, makeNode(label));
         advance();
-    } 
-    else {
-        consume("intcon", "Expected intcon, charcon, or ident");
+    } else {
+        consume("intcon", "<index-list>");
     }
 
-    if (currentToken().type == "comma") {
-        consume("comma", "");
+    if (check("comma")) {
+        advance();
         addChild(node, makeNode("comma"));
         addChild(node, parseIndexList());
     }
@@ -287,73 +238,68 @@ NodePtr StatementSubprogramParser::parseIndexList() {
 
 NodePtr StatementSubprogramParser::parseSubprogramDeclaration() {
     NodePtr node = makeNode("<subprogram-declaration>");
-    if (currentToken().type == "proceduresy") {
+    if (check("proceduresy")) {
         addChild(node, parseProcedureDeclaration());
-    } 
-    else if (currentToken().type == "functionsy") {
+    } else if (check("functionsy")) {
         addChild(node, parseFunctionDeclaration());
-    } 
-    else {
-        consume("proceduresy", "Expected 'procedure' or 'function'");
+    } else {
+        consume("proceduresy", "<subprogram-declaration>");
     }
     return node;
 }
 
 NodePtr StatementSubprogramParser::parseProcedureDeclaration() {
     NodePtr node = makeNode("<procedure-declaration>");
-    consume("proceduresy", "Expected 'procedure'");
+    consume("proceduresy", "<procedure-declaration>");
     addChild(node, makeNode("proceduresy"));
-    
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
-        advance();
-    } 
-    else consume("ident", "Expected identifier");
 
-    if (currentToken().type == "lparent") {
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
+        advance();
+    } else consume("ident", "<procedure-declaration>");
+
+    if (check("lparent")) {
         addChild(node, parseFormalParameterList());
     }
 
-    consume("semicolon", "Expected ';'");
+    consume("semicolon", "<procedure-declaration>");
     addChild(node, makeNode("semicolon"));
-    
+
     addChild(node, parseBlock());
-    
-    consume("semicolon", "Expected ';'");
+
+    consume("semicolon", "<procedure-declaration>");
     addChild(node, makeNode("semicolon"));
     return node;
 }
 
 NodePtr StatementSubprogramParser::parseFunctionDeclaration() {
     NodePtr node = makeNode("<function-declaration>");
-    consume("functionsy", "Expected 'function'");
+    consume("functionsy", "<function-declaration>");
     addChild(node, makeNode("functionsy"));
-    
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
-        advance();
-    }    
-    else consume("ident", "Expected identifier");
 
-    if (currentToken().type == "lparent") {
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
+        advance();
+    } else consume("ident", "<function-declaration>");
+
+    if (check("lparent")) {
         addChild(node, parseFormalParameterList());
     }
 
-    consume("colon", "Expected ':'");
+    consume("colon", "<function-declaration>");
     addChild(node, makeNode("colon"));
 
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
-    } 
-    else consume("ident", "Expected identifier");
+    } else consume("ident", "<function-declaration>");
 
-    consume("semicolon", "Expected ';'");
+    consume("semicolon", "<function-declaration>");
     addChild(node, makeNode("semicolon"));
-    
+
     addChild(node, parseBlock());
-    
-    consume("semicolon", "Expected ';'");
+
+    consume("semicolon", "<function-declaration>");
     addChild(node, makeNode("semicolon"));
     return node;
 }
@@ -361,7 +307,7 @@ NodePtr StatementSubprogramParser::parseFunctionDeclaration() {
 NodePtr StatementSubprogramParser::parseBlock() {
     NodePtr node = makeNode("<block>");
     addChild(node, parseDeclarationPart());
-    while (currentToken().type == "proceduresy" || currentToken().type == "functionsy") {
+    while (check("proceduresy") || check("functionsy")) {
         addChild(node, parseSubprogramDeclaration());
     }
     addChild(node, parseCompoundStatement());
@@ -370,18 +316,18 @@ NodePtr StatementSubprogramParser::parseBlock() {
 
 NodePtr StatementSubprogramParser::parseFormalParameterList() {
     NodePtr node = makeNode("<formal-parameter-list>");
-    consume("lparent", "Expected '('");
+    consume("lparent", "<formal-parameter-list>");
     addChild(node, makeNode("lparent"));
-    
+
     addChild(node, parseParameterGroup());
-    
-    while (currentToken().type == "semicolon") {
-        consume("semicolon", "");
+
+    while (check("semicolon")) {
+        advance();
         addChild(node, makeNode("semicolon"));
         addChild(node, parseParameterGroup());
     }
-    
-    consume("rparent", "Expected ')'");
+
+    consume("rparent", "<formal-parameter-list>");
     addChild(node, makeNode("rparent"));
     return node;
 }
@@ -389,21 +335,19 @@ NodePtr StatementSubprogramParser::parseFormalParameterList() {
 NodePtr StatementSubprogramParser::parseParameterGroup() {
     NodePtr node = makeNode("<parameter-group>");
     addChild(node, parseIdentifierList());
-    
-    consume("colon", "Expected ':'");
+
+    consume("colon", "<parameter-group>");
     addChild(node, makeNode("colon"));
 
-    if (currentToken().type == "arraysy") {
+    if (check("arraysy")) {
         addChild(node, parseArrayType());
-    } 
-    else if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
+    } else if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
-    } 
-    else {
-        consume("ident", "Expected 'ident' or 'array'");
+    } else {
+        consume("ident", "<parameter-group>");
     }
-    
+
     return node;
 }
 
@@ -450,84 +394,32 @@ NodePtr StatementSubprogramParser::parseArrayType() {
 }
 
 NodePtr StatementSubprogramParser::parseStatementList() {
+    // dipake utk body repeat-until dan procedure body. di Parser utama
+    // ada versi sendiri yg juga punya logic semi-comma dipasang ke prev
     NodePtr node = makeNode("<statement-list>");
     size_t before = pos;
     addChild(node, parseStatement());
-    if (pos == before && !isAtEnd() && currentToken().type != "semicolon") {
+    // safety: stmt ga maju + bukan ; -> berhenti biar ga infinite loop
+    if (pos == before && !isAtEnd() && !check("semicolon")) {
         return node;
     }
-    while (currentToken().type == "semicolon") {
-        consume("semicolon", "");
+    while (check("semicolon")) {
+        advance();
         addChild(node, makeNode("semicolon"));
-        if (currentToken().type == "endsy" || currentToken().type == "untilsy" || isAtEnd()) break;
+        if (check("endsy") || check("untilsy") || isAtEnd()) break;
         size_t b = pos;
         addChild(node, parseStatement());
-        if (pos == b && currentToken().type != "semicolon") break;
+        if (pos == b && !check("semicolon")) break;
     }
     return node;
 }
 
 NodePtr StatementSubprogramParser::parseCompoundStatement() {
     NodePtr node = makeNode("<compound-statement>");
-    consume("beginsy", "Expected 'begin'");
+    consume("beginsy", "<compound-statement>");
     addChild(node, makeNode("beginsy"));
     addChild(node, parseStatementList());
-    consume("endsy", "Expected 'end'");
+    consume("endsy", "<compound-statement>");
     addChild(node, makeNode("endsy"));
     return node;
 }
-
-Token StatementSubprogramParser::currentToken() const {
-    if (pos < tokens.size()) {
-        return tokens[pos];
-    }
-    return {"eof", ""};
-}
-
-Token StatementSubprogramParser::peek(int offset) const {
-    if (pos + offset < tokens.size()) {
-        return tokens[pos + offset];
-    }
-    return {"eof", ""};
-}
-
-bool StatementSubprogramParser::isAtEnd() const {
-    return pos >= tokens.size();
-}
-
-void StatementSubprogramParser::advance() {
-    if (!isAtEnd()) {
-        pos++;
-    }
-}
-
-bool StatementSubprogramParser::matchType(const string& type) {
-    if (currentToken().type == type) {
-        advance();
-        return true;
-    }
-    return false;
-}
-
-bool StatementSubprogramParser::matchValue(const string& value) {
-    if (currentToken().value == value) {
-        advance();
-        return true;
-    }
-    return false;
-}
-
-void StatementSubprogramParser::consume(const string& expectedType, const string& errMsg) {
-    if (currentToken().type == expectedType) {
-        advance();
-        return;
-    }
-    //simpan error pertama biar Parser bisa baca via error()
-    if (errorMessage.empty()) {
-        errorMessage = errMsg.empty() ? ("expected token type: " + expectedType + " but got " + currentToken().type) : (errMsg + " (got " + currentToken().type + ")");
-    }
-}
-
-const string& StatementSubprogramParser::error() const { return errorMessage; }
-bool StatementSubprogramParser::hasError() const { return !errorMessage.empty(); }
-void StatementSubprogramParser::clearError() { errorMessage.clear(); }

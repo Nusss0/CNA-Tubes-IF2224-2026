@@ -2,81 +2,59 @@
 
 #include "../lexical/token_processing.hpp"
 #include "parse_tree.hpp"
+#include "parser_base.hpp"
 
 class DeclarationParser;
 class ExpressionParser;
 
-class StatementSubprogramParser {
-    public:
-        // konstruktor
-        explicit StatementSubprogramParser() = default;
-        explicit StatementSubprogramParser(const vector<Token> &tokens);
+// parser utk statement & subprogram declaration.
+// helper token diturunkan dari ParserBase. delegasi ke DeclParser/ExprParser
+// lewat pointer non-owning yg di-inject Parser utama.
+class StatementSubprogramParser : public ParserBase {
+public:
+    StatementSubprogramParser() = default;
+    explicit StatementSubprogramParser(const vector<Token>& tokens) : ParserBase(tokens) {}
 
-        // setter dan getter
-        void setTokens(const vector<Token> &tokens);
-        void setPosition(size_t pos);
-        size_t getPosition() const;
+    // peer parser injection (dipakai utk delegasi internal)
+    void setDeclParser(DeclarationParser* p) { declParser_ = p; }
+    void setExprParser(ExpressionParser* p) { exprParser_ = p; }
 
-        // peer parser injection (dipakai utk delegasi internal stub)
-        void setDeclParser(DeclarationParser* p);
-        void setExprParser(ExpressionParser* p);
+    // parser untuk statements
+    NodePtr parseStatement();
+    NodePtr parseAssignmentStatement();
+    NodePtr parseIfStatement();
+    NodePtr parseCaseStatement();
+    NodePtr parseWhileStatement();
+    NodePtr parseRepeatStatement();
+    NodePtr parseForStatement();
+    NodePtr parseProcedureFunctionCall();
 
-        // error-state API (dibaca sm Parser utk gabungin ke error vector global)
-        const string& error() const;
-        bool hasError() const;
-        void clearError();
+    // parser untuk parameter
+    NodePtr parseParameterList();
+    NodePtr parseVariable();
+    NodePtr parseComponentVariable();
+    NodePtr parseIndexList();
 
-        // parser untuk statements
-        NodePtr parseStatement();
-        NodePtr parseAssignmentStatement();
-        NodePtr parseIfStatement();
-        NodePtr parseCaseStatement();
-        NodePtr parseWhileStatement();
-        NodePtr parseRepeatStatement();
-        NodePtr parseForStatement();
-        NodePtr parseProcedureFunctionCall();
+    // parser untuk deklarasi subprogram
+    NodePtr parseSubprogramDeclaration();
+    NodePtr parseProcedureDeclaration();
+    NodePtr parseFunctionDeclaration();
+    NodePtr parseBlock();
+    NodePtr parseFormalParameterList();
+    NodePtr parseParameterGroup();
 
-        // parser untuk parameter
-        NodePtr parseParameterList();
-        NodePtr parseVariable();
-        NodePtr parseComponentVariable();
-        NodePtr parseIndexList();
+    // method yg di-delegasi ke peer parser (expression/declaration)
+    NodePtr parseCaseBlock();
+    NodePtr parseExpression();
+    NodePtr parseStatementList();
+    NodePtr parseConstant();
+    NodePtr parseDeclarationPart();
+    NodePtr parseCompoundStatement();
+    NodePtr parseIdentifierList();
+    NodePtr parseArrayType();
 
-        // parse untuk deklarasi program
-        NodePtr parseSubprogramDeclaration();
-        NodePtr parseProcedureDeclaration();
-        NodePtr parseFunctionDeclaration();
-        NodePtr parseBlock();
-        NodePtr parseFormalParameterList();
-        NodePtr parseParameterGroup();
-
-        // method untuk parse eksternal
-        NodePtr parseCaseBlock();
-        NodePtr parseExpression();
-        NodePtr parseStatementList();
-        NodePtr parseConstant();
-        NodePtr parseDeclarationPart();
-        NodePtr parseCompoundStatement();
-        NodePtr parseIdentifierList();
-        NodePtr parseArrayType();
-
-    private:
-        // atribut
-        vector<Token> tokens;
-        size_t pos = 0;
-
-        // peer parsers (non-owning)
-        DeclarationParser* declParser_ = nullptr;
-        ExpressionParser* exprParser_ = nullptr;
-
-        string errorMessage;
-
-        // helper untuk mengecek token
-        Token currentToken() const;
-        Token peek(int offset = 1) const;
-        bool isAtEnd() const;
-        void advance();
-        bool matchType(const string &type);
-        bool matchValue(const string &value);
-        void consume(const string &expectedType, const string &errorMessage);
+private:
+    // peer parsers (non-owning, di-set dari Parser utama)
+    DeclarationParser* declParser_ = nullptr;
+    ExpressionParser* exprParser_ = nullptr;
 };

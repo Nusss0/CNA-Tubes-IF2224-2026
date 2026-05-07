@@ -1,10 +1,9 @@
 #include "parser.hpp"
-#include "declaration_parser.hpp"
-#include "stmt_sbpgr_parser.hpp"
 
 Parser::Parser(const vector<Token>& toks)
-    : tokens(toks), pos(0),
+    : ParserBase(toks),
       declParser(toks), exprParser(toks), stmtParser(toks) {
+    // cross-wiring: stmtParser delegasi ke declParser/exprParser
     stmtParser.setDeclParser(&declParser);
     stmtParser.setExprParser(&exprParser);
     skipTrivia();
@@ -13,50 +12,17 @@ Parser::Parser(const vector<Token>& toks)
 //---- helpers ----
 
 void Parser::skipTrivia() {
-    //skip token komentar, parser ga peduli
-    while (pos < (int)tokens.size() && tokens[pos].type == "comment") pos++;
-}
-
-const Token& Parser::peek(int offset) const {
-    static Token eof{"eof", ""};
-    int p = pos + offset;
-    if (p < 0 || p >= (int)tokens.size()) return eof;
-    return tokens[p];
-}
-
-bool Parser::isAtEnd() const {
-    return pos >= (int)tokens.size();
-}
-
-bool Parser::check(const string& type) const {
-    if (isAtEnd()) return type == "eof";
-    return tokens[pos].type == type;
-}
-
-const Token& Parser::advance() {
-    static Token eof{"eof", ""};
-    if (isAtEnd()) return eof;
-    const Token& t = tokens[pos++];
-    skipTrivia(); //auto-skip komentar setelah maju
-    return t;
-}
-
-bool Parser::accept(const string& type) {
-    //consume kalau cocok, kalau ga biarin
-    if (check(type)) { advance(); return true; }
-    return false;
-}
-
-bool Parser::expect(const string& type, const string& ctx) {
-    if (check(type)) { advance(); return true; }
-    reportError("Expected '" + type + "' in " + ctx + " but got " + tokenDisplay(peek()));
-    return false;
+    // skip token komentar, parser ga peduli
+    while (pos < tokens.size() && tokens[pos].type == "comment") pos++;
 }
 
 void Parser::reportError(const string& message) {
-    const Token& t = peek();
-    errors.push_back({message, pos, t.type, t.value});
+    // override base: simpen ke errors[] + cetak ke cerr,
+    // format identik dgn versi lama (Expected '...' (at token #N: <type, value>))
+    Token t = peek();
+    errors.push_back({message, (int)pos, t.type, t.value});
     cerr << "[SYNTAX ERROR] " << message << " (at token #" << pos << ": " << tokenDisplay(t) << ")\n";
+    errorMessage = message;
 }
 
 string Parser::tokenDisplay(const Token& t) {
@@ -65,7 +31,7 @@ string Parser::tokenDisplay(const Token& t) {
 }
 
 void Parser::synchronize(const vector<string>& syncTypes) {
-    //skip token sampai ketemu salah satu sync point
+    // skip token sampai ketemu salah satu sync point
     while (!isAtEnd()) {
         for (const auto& s : syncTypes) {
             if (tokens[pos].type == s) return;
@@ -88,8 +54,8 @@ NodePtr Parser::parseProgram() {
     NodePtr compound = parseCompoundStatement();
     if (compound) addChild(root, compound);
 
-    //program harus diakhiri '.'
-    if (expect("period", "<program>")) {
+    // program harus diakhiri '.'
+    if (consume("period", "<program>")) {
         addChild(root, makeNode("period"));
     }
 
@@ -101,8 +67,8 @@ NodePtr Parser::parseProgram() {
 NodePtr Parser::parseProgramHeader() {
     NodePtr node = makeNode("<program-header>");
 
-    if (!expect("programsy", "<program-header>")) {
-        //ga ada keyword PROGRAM, kembaliin node kosong dan biar caller lanjut
+    if (!consume("programsy", "<program-header>")) {
+        // ga ada keyword PROGRAM, kembaliin node kosong dan biar caller lanjut
         return node;
     }
     addChild(node, makeNode("programsy"));
@@ -114,7 +80,7 @@ NodePtr Parser::parseProgramHeader() {
         reportError("Expected program name (ident) after PROGRAM");
     }
 
-    if (expect("semicolon", "<program-header>")) addChild(node, makeNode("semicolon"));
+    if (consume("semicolon", "<program-header>")) addChild(node, makeNode("semicolon"));
 
     return node;
 }
@@ -122,10 +88,10 @@ NodePtr Parser::parseProgramHeader() {
 NodePtr Parser::parseDeclarationPart() {
     NodePtr node = makeNode("<declaration-part>");
 
-    //const/type/var pertama, urut sesuai grammar
-    declParser.setPosition((size_t)pos);
+    // const/type/var pertama, urut sesuai grammar (delegasi ke DeclarationParser)
+    declParser.setPosition(pos);
     NodePtr decls = declParser.parseDeclarationPart();
-    pos = (int)declParser.getPosition();
+    pos = declParser.getPosition();
     if (decls && !decls->children.empty()) {
         for (auto& child : decls->children) {
             addChild(node, child);
@@ -135,11 +101,12 @@ NodePtr Parser::parseDeclarationPart() {
         reportError(declParser.error());
     }
 
-    //subprogram (procedure/function) hanya boleh setelah const/type/var
+    // subprogram (procedure/function) hanya boleh setelah const/type/var
     while (check("proceduresy") || check("functionsy")) {
+        size_t before = pos;
         NodePtr d = parseDeclaration();
         if (d) addChild(node, d);
-        else break;
+        if (pos == before) break; // safety: cegah infinite loop
     }
 
     return node;
@@ -148,7 +115,7 @@ NodePtr Parser::parseDeclarationPart() {
 NodePtr Parser::parseCompoundStatement() {
     NodePtr node = makeNode("<compound-statement>");
 
-    if (!expect("beginsy", "<compound-statement>")) {
+    if (!consume("beginsy", "<compound-statement>")) {
         synchronize({"endsy", "period"});
         return node;
     }
@@ -157,7 +124,7 @@ NodePtr Parser::parseCompoundStatement() {
     NodePtr list = parseStatementList();
     if (list) addChild(node, list);
 
-    if (expect("endsy", "<compound-statement>")) addChild(node, makeNode("endsy"));
+    if (consume("endsy", "<compound-statement>")) addChild(node, makeNode("endsy"));
     return node;
 }
 
@@ -171,7 +138,8 @@ NodePtr Parser::parseStatementList() {
         advance();
         NodePtr semi = makeNode("semicolon");
         if (check("endsy")) {
-            // trailing ';' sebelum END
+            // trailing ';' sblm END: kalau prev procedure-call attach ke prev,
+            // selain itu attach ke list. (preserves original tree shape)
             if (prev && prev->label == "<procedure/function-call>") addChild(prev, semi);
             else addChild(node, semi);
             break;
@@ -189,39 +157,39 @@ NodePtr Parser::parseStatementList() {
 //---- delegated to sub-parsers ----
 
 NodePtr Parser::parseDeclaration() {
-    //skrg cuma dipanggil dari subprogram-loop, jadi cuma proc/func
-    const string& head = peek().type;
-    if (head != "proceduresy" && head != "functionsy") {
+    // skrg cuma dipanggil dari subprogram-loop, jadi cuma proc/func
+    if (!check("proceduresy") && !check("functionsy")) {
         reportError("Expected 'procedure' or 'function' in <declaration>");
         advance();
         return nullptr;
     }
 
     stmtParser.clearError();
-    stmtParser.setPosition((size_t)pos);
+    stmtParser.setPosition(pos);
     NodePtr inner = stmtParser.parseSubprogramDeclaration();
-    pos = (int)stmtParser.getPosition();
+    pos = stmtParser.getPosition();
     if (stmtParser.hasError()) reportError(stmtParser.error());
     return inner;
 }
 
 NodePtr Parser::parseStatement() {
-    //statement boleh kosong (ε), return nullptr biar ga muncul di tree
+    // statement boleh kosong (ε), return nullptr biar ga muncul di tree
     if (check("endsy") || check("semicolon") || check("elsesy") || check("untilsy") || isAtEnd()) {
         return nullptr;
     }
 
     if (check("beginsy")) {
+        // compound statement bersarang
         return parseCompoundStatement();
     }
 
-    int before = pos;
+    size_t before = pos;
     stmtParser.clearError();
-    stmtParser.setPosition((size_t)pos);
+    stmtParser.setPosition(pos);
     NodePtr inner = stmtParser.parseStatement();
-    pos = (int)stmtParser.getPosition();
+    pos = stmtParser.getPosition();
     if (stmtParser.hasError()) reportError(stmtParser.error());
-    //jaga2: kalau ga ada progress dan ga ada error, paksa error + advance biar ga deadlock
+    // jaga2: kalau ga ada progress dan ga ada error, paksa error + advance biar ga deadlock
     if (pos == before && !inner && !stmtParser.hasError()) {
         reportError("Could not parse statement at " + tokenDisplay(peek()));
         advance();

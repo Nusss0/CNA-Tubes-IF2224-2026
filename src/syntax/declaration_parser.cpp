@@ -1,59 +1,7 @@
 #include "declaration_parser.hpp"
 
-DeclarationParser::DeclarationParser(const vector<Token>& tokens) : tokens(tokens), pos(0) {}
-
-const string& DeclarationParser::error() const {
-    return errorMessage;
-}
-
-void DeclarationParser::setPosition(size_t p) {
-    pos = p;
-}
-
-size_t DeclarationParser::getPosition() const {
-    return pos;
-}
-
-const Token* DeclarationParser::peek(size_t offset) const {
-    // Lookahead token tanpa memindahkan posisi parser
-    size_t index = pos + offset;
-    if (index >= tokens.size()){
-        return nullptr;
-    }
-
-    return &tokens[index];
-}
-
-bool DeclarationParser::end() const {
-    return pos >= tokens.size();
-}
-
-bool DeclarationParser::check(const string& type) const {
-    const Token* token = peek();
-    return token != nullptr && token->type == type;
-}
-
-bool DeclarationParser::match(const string& type) {
-    if (!check(type)){
-        return false;
-    }
-
-    next();
-    return true;
-}
-
-const Token& DeclarationParser::next() {
-    if (end()) {
-        return tokens.back();
-    }
-    
-    return tokens[pos++];
-}
-
-const Token& DeclarationParser::prev() const {
-    return tokens[pos - 1];
-}
-
+// override base utk ngasih kutip single-quote di charcon/string,
+// supaya output parse tree konsisten sm ExprParser/StmtParser
 NodePtr DeclarationParser::makeTokenNode(const Token& token) const {
     if (token.value.empty()) {
         return makeNode(token.type);
@@ -64,36 +12,34 @@ NodePtr DeclarationParser::makeTokenNode(const Token& token) const {
     return makeNode(token.type + "(" + token.value + ")");
 }
 
+// format error legacy sub-parser: "Syntax error: unexpected token X(value), expected Y"
 void DeclarationParser::setError(const string& expected, const Token& found) {
     errorMessage = "Syntax error: unexpected token " + found.type;
     if (!found.value.empty()) {
         errorMessage += "(" + found.value + ")";
     }
-
     errorMessage += ", expected " + expected;
 }
 
 bool DeclarationParser::isConstantStart(size_t offset) const {
-    const Token* token = peek(offset);
-    if (!token){
-        return false;
-    }
-
-    return token->type == "ident" || token->type == "intcon" || token->type == "realcon" || token->type == "charcon" || token->type == "string" || token->type == "plus" || token->type == "minus";
+    if (pos + offset >= tokens.size()) return false;
+    const string& type = tokens[pos + offset].type;
+    return type == "ident" || type == "intcon" || type == "realcon"
+        || type == "charcon" || type == "string" || type == "plus" || type == "minus";
 }
 
 bool DeclarationParser::isRangeAhead(size_t offset) const {
-    const Token* first = peek(offset);
-    const Token* second = peek(offset + 1);
-    const Token* third = peek(offset + 2);
-    return first && second && third && isConstantStart(offset) && second->type == "period" && third->type == "period";
+    // pola: constant '..' constant -> butuh 3 token kedepan
+    if (pos + offset + 2 >= tokens.size()) return false;
+    return isConstantStart(offset)
+        && tokens[pos + offset + 1].type == "period"
+        && tokens[pos + offset + 2].type == "period";
 }
 
 NodePtr DeclarationParser::parseDeclarationPart() {
-    // baca deklarasi const/type/var secara urut (sesuai grammar)
-    // subprogram (procedure/function) di-handle Parser, bukan disini
+    // baca const/type/var section secara urut. subprogram (proc/func)
+    // di-handle Parser utama, bukan disini.
     errorMessage.clear();
-
     auto root = makeNode("<declaration-part>");
 
     // const section (opsional, harus paling awal)
@@ -101,13 +47,11 @@ NodePtr DeclarationParser::parseDeclarationPart() {
         addChild(root, parseConstDeclaration());
         if (!errorMessage.empty()) return root;
     }
-
     // type section (opsional, setelah const)
     while (check("typesy")) {
         addChild(root, parseTypeDeclaration());
         if (!errorMessage.empty()) return root;
     }
-
     // var section (opsional, setelah type)
     while (check("varsy")) {
         addChild(root, parseVarDeclaration());
@@ -120,22 +64,20 @@ NodePtr DeclarationParser::parseDeclarationPart() {
 NodePtr DeclarationParser::parseProgramHeader() {
     auto node = makeNode("<program-header>");
 
-    if (!match("programsy")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("programsy")) return node;
+    addChild(node, makeTokenNode(advance()));
 
     if (!check("ident")) {
-        setError("ident", *peek());
+        setError("ident", peek());
         return node;
     }
-    addChild(node, makeTokenNode(next()));
+    addChild(node, makeTokenNode(advance()));
 
-    if (!match("semicolon")) {
-        setError("semicolon", *peek());
+    if (!check("semicolon")) {
+        setError("semicolon", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     return node;
 }
@@ -144,35 +86,33 @@ NodePtr DeclarationParser::parseConstDeclaration() {
     errorMessage.clear();
     auto node = makeNode("<const-declaration>");
 
-    if (!match("constsy")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("constsy")) return node;
+    addChild(node, makeTokenNode(advance()));
 
     while (check("ident")) {
         auto item = makeNode("<const-item>");
-        addChild(item, makeTokenNode(next()));
+        addChild(item, makeTokenNode(advance()));
 
-        if (!match("eql")) {
-            setError("eql", *peek());
+        if (!check("eql")) {
+            setError("eql", peek());
             addChild(node, item);
             return node;
         }
-        addChild(item, makeTokenNode(prev()));
+        addChild(item, makeTokenNode(advance()));
 
         addChild(item, parseConstant());
 
-        if (!match("semicolon")) {
-            setError("semicolon", *peek());
+        if (!check("semicolon")) {
+            setError("semicolon", peek());
             addChild(node, item);
             return node;
         }
-        addChild(item, makeTokenNode(prev()));
+        addChild(item, makeTokenNode(advance()));
         addChild(node, item);
     }
 
     if (node->children.size() == 1) {
-        setError("ident", *peek());
+        setError("ident", peek());
     }
 
     return node;
@@ -182,35 +122,33 @@ NodePtr DeclarationParser::parseTypeDeclaration() {
     errorMessage.clear();
     auto node = makeNode("<type-declaration>");
 
-    if (!match("typesy")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("typesy")) return node;
+    addChild(node, makeTokenNode(advance()));
 
     while (check("ident")) {
         auto item = makeNode("<type-item>");
-        addChild(item, makeTokenNode(next()));
+        addChild(item, makeTokenNode(advance()));
 
-        if (!match("eql")) {
-            setError("eql", *peek());
+        if (!check("eql")) {
+            setError("eql", peek());
             addChild(node, item);
             return node;
         }
-        addChild(item, makeTokenNode(prev()));
+        addChild(item, makeTokenNode(advance()));
 
         addChild(item, parseType());
 
-        if (!match("semicolon")) {
-            setError("semicolon", *peek());
+        if (!check("semicolon")) {
+            setError("semicolon", peek());
             addChild(node, item);
             return node;
         }
-        addChild(item, makeTokenNode(prev()));
+        addChild(item, makeTokenNode(advance()));
         addChild(node, item);
     }
 
     if (node->children.size() == 1) {
-        setError("ident", *peek());
+        setError("ident", peek());
     }
 
     return node;
@@ -220,35 +158,33 @@ NodePtr DeclarationParser::parseVarDeclaration() {
     errorMessage.clear();
     auto node = makeNode("<var-declaration>");
 
-    if (!match("varsy")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("varsy")) return node;
+    addChild(node, makeTokenNode(advance()));
 
     while (check("ident")) {
         auto item = makeNode("<var-item>");
         addChild(item, parseIdentifierList());
 
-        if (!match("colon")) {
-            setError("colon", *peek());
+        if (!check("colon")) {
+            setError("colon", peek());
             addChild(node, item);
             return node;
         }
-        addChild(item, makeTokenNode(prev()));
+        addChild(item, makeTokenNode(advance()));
 
         addChild(item, parseType());
 
-        if (!match("semicolon")) {
-            setError("semicolon", *peek());
+        if (!check("semicolon")) {
+            setError("semicolon", peek());
             addChild(node, item);
             return node;
         }
-        addChild(item, makeTokenNode(prev()));
+        addChild(item, makeTokenNode(advance()));
         addChild(node, item);
     }
 
     if (node->children.size() == 1) {
-        setError("ident", *peek());
+        setError("ident", peek());
     }
 
     return node;
@@ -259,19 +195,18 @@ NodePtr DeclarationParser::parseIdentifierList() {
     auto node = makeNode("<identifier-list>");
 
     if (!check("ident")) {
-        setError("ident", *peek());
+        setError("ident", peek());
         return node;
     }
+    addChild(node, makeTokenNode(advance()));
 
-    addChild(node, makeTokenNode(next()));
-
-    while (match("comma")) {
-        addChild(node, makeTokenNode(prev()));
+    while (check("comma")) {
+        addChild(node, makeTokenNode(advance()));
         if (!check("ident")) {
-            setError("ident", *peek());
+            setError("ident", peek());
             return node;
         }
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
     }
 
     return node;
@@ -284,28 +219,24 @@ NodePtr DeclarationParser::parseType() {
         addChild(node, parseRange());
         return node;
     }
-
     if (check("arraysy")) {
         addChild(node, parseArrayType());
         return node;
     }
-
     if (check("recordsy")) {
         addChild(node, parseRecordType());
         return node;
     }
-
     if (check("lparent")) {
         addChild(node, parseEnumerated());
         return node;
     }
-
     if (check("ident")) {
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
         return node;
     }
 
-    setError("type", *peek());
+    setError("type", peek());
     return node;
 }
 
@@ -313,37 +244,35 @@ NodePtr DeclarationParser::parseArrayType() {
     errorMessage.clear();
     auto node = makeNode("<array-type>");
 
-    if (!match("arraysy")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("arraysy")) return node;
+    addChild(node, makeTokenNode(advance()));
 
-    if (!match("lbrack")) {
-        setError("lbrack", *peek());
+    if (!check("lbrack")) {
+        setError("lbrack", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     if (isRangeAhead()) {
         addChild(node, parseRange());
     } else if (check("ident")) {
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
     } else {
-        setError("range or ident", *peek());
+        setError("range or ident", peek());
         return node;
     }
 
-    if (!match("rbrack")) {
-        setError("rbrack", *peek());
+    if (!check("rbrack")) {
+        setError("rbrack", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
-    if (!match("ofsy")) {
-        setError("ofsy", *peek());
+    if (!check("ofsy")) {
+        setError("ofsy", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     addChild(node, parseType());
     return node;
@@ -354,17 +283,17 @@ NodePtr DeclarationParser::parseRange() {
 
     addChild(node, parseConstant());
 
-    if (!match("period")) {
-        setError("period", *peek());
+    if (!check("period")) {
+        setError("period", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
-    if (!match("period")) {
-        setError("period", *peek());
+    if (!check("period")) {
+        setError("period", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     addChild(node, parseConstant());
     return node;
@@ -373,31 +302,29 @@ NodePtr DeclarationParser::parseRange() {
 NodePtr DeclarationParser::parseEnumerated() {
     auto node = makeNode("<enumerated>");
 
-    if (!match("lparent")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("lparent")) return node;
+    addChild(node, makeTokenNode(advance()));
 
     if (!check("ident")) {
-        setError("ident", *peek());
+        setError("ident", peek());
         return node;
     }
-    addChild(node, makeTokenNode(next()));
+    addChild(node, makeTokenNode(advance()));
 
-    while (match("comma")) {
-        addChild(node, makeTokenNode(prev()));
+    while (check("comma")) {
+        addChild(node, makeTokenNode(advance()));
         if (!check("ident")) {
-            setError("ident", *peek());
+            setError("ident", peek());
             return node;
         }
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
     }
 
-    if (!match("rparent")) {
-        setError("rparent", *peek());
+    if (!check("rparent")) {
+        setError("rparent", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     return node;
 }
@@ -405,18 +332,16 @@ NodePtr DeclarationParser::parseEnumerated() {
 NodePtr DeclarationParser::parseRecordType() {
     auto node = makeNode("<record-type>");
 
-    if (!match("recordsy")) {
-        return node;
-    }
-    addChild(node, makeTokenNode(prev()));
+    if (!check("recordsy")) return node;
+    addChild(node, makeTokenNode(advance()));
 
     addChild(node, parseFieldList());
 
-    if (!match("endsy")) {
-        setError("endsy", *peek());
+    if (!check("endsy")) {
+        setError("endsy", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     return node;
 }
@@ -425,19 +350,16 @@ NodePtr DeclarationParser::parseFieldList() {
     auto node = makeNode("<field-list>");
 
     if (!check("ident")) {
-        setError("ident", *peek());
+        setError("ident", peek());
         return node;
     }
 
     addChild(node, parseFieldPart());
 
-    while (match("semicolon")) {
-        if (check("endsy")) {
-            // addChild(node, makeTokenNode(prev()));
-            break;
-        }
-
-        addChild(node, makeTokenNode(prev()));
+    while (check("semicolon")) {
+        Token semi = advance();
+        if (check("endsy")) break;
+        addChild(node, makeTokenNode(semi));
         addChild(node, parseFieldPart());
     }
 
@@ -449,11 +371,11 @@ NodePtr DeclarationParser::parseFieldPart() {
 
     addChild(node, parseIdentifierList());
 
-    if (!match("colon")) {
-        setError("colon", *peek());
+    if (!check("colon")) {
+        setError("colon", peek());
         return node;
     }
-    addChild(node, makeTokenNode(prev()));
+    addChild(node, makeTokenNode(advance()));
 
     addChild(node, parseType());
     return node;
@@ -464,24 +386,24 @@ NodePtr DeclarationParser::parseConstant() {
     auto node = makeNode("<constant>");
 
     if (check("charcon") || check("string")) {
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
         return node;
     }
 
     if (check("plus") || check("minus")) {
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
     }
 
-    if (!peek()) {
+    if (isAtEnd()) {
         setError("constant", Token{"<eof>", ""});
         return node;
     }
 
     if (check("ident") || check("intcon") || check("realcon") || check("charcon") || check("string")) {
-        addChild(node, makeTokenNode(next()));
+        addChild(node, makeTokenNode(advance()));
         return node;
     }
 
-    setError("constant", *peek());
+    setError("constant", peek());
     return node;
 }

@@ -2,44 +2,24 @@
 
 #include "../lexical/token_processing.hpp"
 #include "parse_tree.hpp"
+#include "parser_base.hpp"
 
-class ExpressionParser {
-    public:
-        // konstruktor
-        explicit ExpressionParser() = default;
-        explicit ExpressionParser(const vector<Token> &tokens);
+// parser khusus expression: <expression>, <simple-expression>, <term>, <factor>.
+// helper token (peek/check/advance/match/consume) diturunkan dari ParserBase.
+class ExpressionParser : public ParserBase {
+public:
+    ExpressionParser() = default;
+    explicit ExpressionParser(const vector<Token>& tokens) : ParserBase(tokens) {}
 
-        // setter dan getter
-        void setTokens(const vector<Token> &tokens);
-        void setPosition(size_t pos);
-        size_t getPosition() const;
+    NodePtr parseExpression();
+    NodePtr parseSimpleExpression();
+    NodePtr parseTerm();
+    NodePtr parseFactor();
 
-        // error-state API (sama dgn stmtParser/declParser)
-        const string& error() const;
-        bool hasError() const;
-        void clearError();
-
-        // parser untuk statements
-        NodePtr parseExpression();
-        NodePtr parseSimpleExpression();
-        NodePtr parseTerm();
-        NodePtr parseFactor();
-
-    private:
-        NodePtr parseVariable();
-        NodePtr parseProcedureFunctionCall();
-        NodePtr parseIndexList();
-        // atribut
-        vector<Token> tokens;
-        size_t pos = 0;
-        string errorMessage;
-
-        // helper untuk mengecek token
-        Token currentToken() const;
-        Token peek(int offset = 1) const;
-        bool isAtEnd() const;
-        void advance();
-        bool matchType(const string &type);
-        bool matchValue(const string &value);
-        void consume(const string &expectedType, const string &errorMessage);
+private:
+    // factor bisa ngandung ident yg sebenernya call/variabel,
+    // jadi parse logic-nya di-mirror sebagian dari StmtParser
+    NodePtr parseVariable();
+    NodePtr parseProcedureFunctionCall();
+    NodePtr parseIndexList();
 };

@@ -1,35 +1,18 @@
 #include "expression_parser.hpp"
-#include <iostream>
 
-ExpressionParser::ExpressionParser(const vector<Token>& tokens) {
-    this->tokens = tokens;
-    this->pos = 0;
-}
-
-void ExpressionParser::setTokens(const vector<Token>& tokens) {
-    this->tokens = tokens;
-    this->pos = 0;
-}
-
-void ExpressionParser::setPosition(size_t pos) {
-    this->pos = pos;
-}
-
-size_t ExpressionParser::getPosition() const {
-    return pos;
-}
-
-NodePtr ExpressionParser::parseFactor(){
+NodePtr ExpressionParser::parseFactor() {
     NodePtr node = makeNode("<factor>");
-    Token t = currentToken();
+    Token t = peek();
     if (t.type == "intcon" || t.type == "realcon" || t.type == "charcon" || t.type == "string") {
+        // literal: charcon/string dikutip pake single-quote sesuai output lama
         string label = t.type;
         if (t.type == "charcon" || t.type == "string") label += "('" + t.value + "')";
         else label += "(" + t.value + ")";
         addChild(node, makeNode(label));
         advance();
     } else if (t.type == "ident") {
-        Token n = peek();
+        // ident bisa call (foo(...)) atau variabel (foo[..]/foo.x) atau plain
+        Token n = peek(1);
         if (n.type == "lparent") {
             addChild(node, parseProcedureFunctionCall());
         } else if (n.type == "lbrack" || n.type == "period") {
@@ -39,16 +22,19 @@ NodePtr ExpressionParser::parseFactor(){
             advance();
         }
     } else if (t.type == "lparent") {
-        consume("lparent", "Expected '('");
+        // ( expression )
+        consume("lparent", "<factor>");
         addChild(node, makeNode("lparent"));
         addChild(node, parseExpression());
-        consume("rparent", "Expected ')'");
+        consume("rparent", "<factor>");
         addChild(node, makeNode("rparent"));
     } else if (t.type == "notsy") {
-        consume("notsy", "Expected 'not'");
+        // not factor
+        consume("notsy", "<factor>");
         addChild(node, makeNode("notsy"));
         addChild(node, parseFactor());
     } else {
+        // token ga dikenali, simpen error pertama
         if (errorMessage.empty()) errorMessage = "unexpected token in <factor>: " + t.type;
     }
     return node;
@@ -56,28 +42,29 @@ NodePtr ExpressionParser::parseFactor(){
 
 NodePtr ExpressionParser::parseVariable() {
     NodePtr node = makeNode("<variable>");
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
     } else {
-        consume("ident", "Expected identifier");
+        consume("ident", "<variable>");
     }
-    while (currentToken().type == "lbrack" || currentToken().type == "period") {
+    // variabel komposit: array indexing (foo[i]) atau record field (foo.x)
+    while (check("lbrack") || check("period")) {
         NodePtr comp = makeNode("<component-variable>");
-        if (currentToken().type == "lbrack") {
+        if (check("lbrack")) {
             advance();
             addChild(comp, makeNode("lbrack"));
             addChild(comp, parseIndexList());
-            consume("rbrack", "Expected ']'");
+            consume("rbrack", "<component-variable>");
             addChild(comp, makeNode("rbrack"));
-        } else if (currentToken().type == "period") {
+        } else if (check("period")) {
             advance();
             addChild(comp, makeNode("period"));
-            if (currentToken().type == "ident") {
-                addChild(comp, makeNode("ident(" + currentToken().value + ")"));
+            if (check("ident")) {
+                addChild(comp, makeNode("ident(" + peek().value + ")"));
                 advance();
             } else {
-                consume("ident", "Expected identifier");
+                consume("ident", "<component-variable>");
             }
         }
         addChild(node, comp);
@@ -87,24 +74,25 @@ NodePtr ExpressionParser::parseVariable() {
 
 NodePtr ExpressionParser::parseProcedureFunctionCall() {
     NodePtr node = makeNode("<procedure/function-call>");
-    if (currentToken().type == "ident") {
-        addChild(node, makeNode("ident(" + currentToken().value + ")"));
+    if (check("ident")) {
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
     } else {
-        consume("ident", "Expected identifier");
+        consume("ident", "<procedure/function-call>");
     }
-    if (currentToken().type == "lparent") {
+    if (check("lparent")) {
         advance();
         addChild(node, makeNode("lparent"));
-        if (currentToken().type != "rparent") {
+        if (!check("rparent")) {
+            // parameter list
             addChild(node, parseExpression());
-            while (currentToken().type == "comma") {
+            while (check("comma")) {
                 addChild(node, makeNode("comma"));
                 advance();
                 addChild(node, parseExpression());
             }
         }
-        consume("rparent", "Expected ')'");
+        consume("rparent", "<procedure/function-call>");
         addChild(node, makeNode("rparent"));
     }
     return node;
@@ -112,7 +100,7 @@ NodePtr ExpressionParser::parseProcedureFunctionCall() {
 
 NodePtr ExpressionParser::parseIndexList() {
     NodePtr node = makeNode("<index-list>");
-    Token t = currentToken();
+    Token t = peek();
     if (t.type == "intcon" || t.type == "charcon" || t.type == "ident") {
         string label = t.type;
         if (t.type == "charcon") label += "('" + t.value + "')";
@@ -120,9 +108,9 @@ NodePtr ExpressionParser::parseIndexList() {
         addChild(node, makeNode(label));
         advance();
     } else {
-        consume("intcon", "Expected intcon, charcon, or ident");
+        consume("intcon", "<index-list>");
     }
-    if (currentToken().type == "comma") {
+    if (check("comma")) {
         advance();
         addChild(node, makeNode("comma"));
         addChild(node, parseIndexList());
@@ -133,8 +121,9 @@ NodePtr ExpressionParser::parseIndexList() {
 NodePtr ExpressionParser::parseTerm() {
     NodePtr node = makeNode("<term>");
     addChild(node, parseFactor());
-    while (currentToken().type == "times" || currentToken().type == "idiv" || currentToken().type == "rdiv" || currentToken().type == "imod" || currentToken().type == "andsy") {
-        addChild(node, makeNode(currentToken().type));
+    // operator multiplicative + 'and'
+    while (check("times") || check("idiv") || check("rdiv") || check("imod") || check("andsy")) {
+        addChild(node, makeNode(peek().type));
         advance();
         addChild(node, parseFactor());
     }
@@ -143,13 +132,15 @@ NodePtr ExpressionParser::parseTerm() {
 
 NodePtr ExpressionParser::parseSimpleExpression() {
     NodePtr node = makeNode("<simple-expression>");
-    if (currentToken().type == "plus" || currentToken().type == "minus") {
-        addChild(node, makeNode(currentToken().type));
+    // unary +/- di awal (opsional)
+    if (check("plus") || check("minus")) {
+        addChild(node, makeNode(peek().type));
         advance();
     }
     addChild(node, parseTerm());
-    while (currentToken().type == "plus" || currentToken().type == "minus" || currentToken().type == "orsy") {
-        addChild(node, makeNode(currentToken().type));
+    // operator additive + 'or'
+    while (check("plus") || check("minus") || check("orsy")) {
+        addChild(node, makeNode(peek().type));
         advance();
         addChild(node, parseTerm());
     }
@@ -159,64 +150,11 @@ NodePtr ExpressionParser::parseSimpleExpression() {
 NodePtr ExpressionParser::parseExpression() {
     NodePtr node = makeNode("<expression>");
     addChild(node, parseSimpleExpression());
-    if (currentToken().type == "eql" || currentToken().type == "neq" || currentToken().type == "lss" || currentToken().type == "leq" || currentToken().type == "gtr" || currentToken().type == "geq") {
-        addChild(node, makeNode(currentToken().type));
+    // operator relational (opsional, satu kali)
+    if (check("eql") || check("neq") || check("lss") || check("leq") || check("gtr") || check("geq")) {
+        addChild(node, makeNode(peek().type));
         advance();
         addChild(node, parseSimpleExpression());
     }
     return node;
 }
-
-Token ExpressionParser::currentToken() const {
-    if (pos < tokens.size()) {
-        return tokens[pos];
-    }
-    return {"eof", ""};
-}
-
-Token ExpressionParser::peek(int offset) const {
-    if (pos + offset < tokens.size()) {
-        return tokens[pos + offset];
-    }
-    return {"eof", ""};
-}
-
-bool ExpressionParser::isAtEnd() const {
-    return pos >= tokens.size();
-}
-
-void ExpressionParser::advance() {
-    if (!isAtEnd()) {
-        pos++;
-    }
-}
-
-bool ExpressionParser::matchType(const string& type) {
-    if (currentToken().type == type) {
-        advance();
-        return true;
-    }
-    return false;
-}
-
-bool ExpressionParser::matchValue(const string& value) {
-    if (currentToken().value == value) {
-        advance();
-        return true;
-    }
-    return false;
-}
-
-void ExpressionParser::consume(const string& expectedType, const string& errMsg) {
-    if (currentToken().type == expectedType) {
-        advance();
-        return;
-    }
-    if (errorMessage.empty()) {
-        errorMessage = errMsg.empty() ? ("expected token type: " + expectedType + " but got " + currentToken().type) : (errMsg + " (got " + currentToken().type + ")");
-    }
-}
-
-const string& ExpressionParser::error() const { return errorMessage; }
-bool ExpressionParser::hasError() const { return !errorMessage.empty(); }
-void ExpressionParser::clearError() { errorMessage.clear(); }

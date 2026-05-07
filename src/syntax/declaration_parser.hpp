@@ -3,16 +3,21 @@
 #include "../std.hpp"
 #include "parse_tree.hpp"
 #include "../lexical/token_processing.hpp"
+#include "parser_base.hpp"
 
-class DeclarationParser {
+// parser untuk const/type/var declaration & program-header.
+// helper token diturunkan dari ParserBase. method2 utama di-public-kan
+// supaya bisa dipanggil dari Parser utama / StatementSubprogramParser
+// dgn pola pos-sync.
+class DeclarationParser : public ParserBase {
 public:
-    // New parser dari list token hasil lexer
-    explicit DeclarationParser(const vector<Token>& tokens);
+    DeclarationParser() = default;
+    explicit DeclarationParser(const vector<Token>& tokens) : ParserBase(tokens) {}
 
-    // Parsing deklarasi
+    // parse seluruh const/type/var section secara urut
     NodePtr parseDeclarationPart();
 
-    // Promoted: dipanggil dari Parser dan StatementSubprogramParser dengan pos-sync
+    // dipanggil per-section dari Parser utama atau StmtParser
     NodePtr parseConstDeclaration();
     NodePtr parseTypeDeclaration();
     NodePtr parseVarDeclaration();
@@ -20,53 +25,23 @@ public:
     NodePtr parseIdentifierList();
     NodePtr parseArrayType();
 
-    // Pos-sync API (cocok dgn ExpressionParser / StatementSubprogramParser)
-    void setPosition(size_t p);
-    size_t getPosition() const;
-
-    // Ambil last error msg
-    const string& error() const;
-
 private:
-    const vector<Token>& tokens;
-    size_t pos;
-    string errorMessage;
-
-    // Intip token
-    const Token* peek(size_t offset = 0) const;
-
-    // Cek apakah habis
-    bool end() const;
-
-    // Cek tipe token skrg
-    bool check(const string& type) const;
-    
-    // Match token dan gunakan jika sesuai
-    bool match(const string& type);
-
-    // Geser posisi parser 1 token
-    const Token& next();
-
-    // Ambil token yang terakhir digunakan
-    const Token& prev() const;
-
-    // Ubah token jadi node parse tree
+    // override base: charcon/string dikutip pake single-quote
     NodePtr makeTokenNode(const Token& token) const;
 
-    // Simpen error
+    // helper error legacy: "Syntax error: unexpected token X(value), expected Y"
     void setError(const string& expected, const Token& found);
 
-    // Cek apakah token bisa mulai constant (curr pos)
+    // cek apakah token bisa mulai constant (ident/intcon/realcon/charcon/string/+/-)
     bool isConstantStart(size_t offset = 0) const;
-
-    // Cek apakah token membentuk range (curr pos)
+    // cek apakah ada pola constant '..' di posisi (curr+offset)
     bool isRangeAhead(size_t offset = 0) const;
 
-    NodePtr parseProgramHeader(); // program header
-    NodePtr parseType(); // type
-    NodePtr parseRange(); // range constant..constant
-    NodePtr parseEnumerated(); // enumerated
-    NodePtr parseRecordType(); // record type
-    NodePtr parseFieldList(); // field list
-    NodePtr parseFieldPart(); // field part
+    NodePtr parseProgramHeader();
+    NodePtr parseType();
+    NodePtr parseRange();       // constant '..' constant
+    NodePtr parseEnumerated();
+    NodePtr parseRecordType();
+    NodePtr parseFieldList();
+    NodePtr parseFieldPart();
 };
