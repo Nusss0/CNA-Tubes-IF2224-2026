@@ -70,11 +70,21 @@ NodePtr StatementSubprogramParser::parseStatement() {
 
 NodePtr StatementSubprogramParser::parseAssignmentStatement() {
     NodePtr node = makeNode("<assignment-statement>");
-    addChild(node, parseVariable());
+    // kalau ident sederhana (ga ada [ atau .), langsung ident tanpa <variable>
+    if (currentToken().type == "ident") {
+        Token nxt = peek();
+        if (nxt.type != "lbrack" && nxt.type != "period") {
+            addChild(node, makeNode("ident(" + currentToken().value + ")"));
+            advance();
+        } else {
+            addChild(node, parseVariable());
+        }
+    } else {
+        addChild(node, parseVariable());
+    }
     if (matchType("becomes")) {
         addChild(node, makeNode("becomes"));
-    } 
-    else {
+    } else {
         consume("becomes", "Expected ':='");
     }
     addChild(node, parseExpression());
@@ -257,8 +267,10 @@ NodePtr StatementSubprogramParser::parseIndexList() {
     NodePtr node = makeNode("<index-list>");
     Token t = currentToken();
     if (t.type == "intcon" || t.type == "charcon" || t.type == "ident") {
-        if (t.value != "") addChild(node, makeNode(t.type + "(" + t.value + ")"));
-        else addChild(node, makeNode(t.type));
+        string label = t.type;
+        if (t.type == "charcon") label += "('" + t.value + "')";
+        else if (!t.value.empty()) label += "(" + t.value + ")";
+        addChild(node, makeNode(label));
         advance();
     } 
     else {

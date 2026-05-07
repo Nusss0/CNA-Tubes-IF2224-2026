@@ -58,7 +58,9 @@ NodePtr DeclarationParser::makeTokenNode(const Token& token) const {
     if (token.value.empty()) {
         return makeNode(token.type);
     }
-
+    if (token.type == "charcon" || token.type == "string") {
+        return makeNode(token.type + "('" + token.value + "')");
+    }
     return makeNode(token.type + "(" + token.value + ")");
 }
 
@@ -88,42 +90,28 @@ bool DeclarationParser::isRangeAhead(size_t offset) const {
 }
 
 NodePtr DeclarationParser::parseDeclarationPart() {
-    // baca deklarasi sampai ketemu begin
+    // baca deklarasi const/type/var secara urut (sesuai grammar)
+    // subprogram (procedure/function) di-handle Parser, bukan disini
     errorMessage.clear();
 
     auto root = makeNode("<declaration-part>");
 
-    if (check("programsy")) {
-        addChild(root, parseProgramHeader());
+    // const section (opsional, harus paling awal)
+    while (check("constsy")) {
+        addChild(root, parseConstDeclaration());
+        if (!errorMessage.empty()) return root;
     }
 
-    while (!end() && !check("beginsy")) {
-        size_t before = pos;
+    // type section (opsional, setelah const)
+    while (check("typesy")) {
+        addChild(root, parseTypeDeclaration());
+        if (!errorMessage.empty()) return root;
+    }
 
-        // sequential (harus urut)
-        if (check("constsy")) {
-            addChild(root, parseConstDeclaration());
-        }
-
-        if (!errorMessage.empty()){
-            return root;
-        }
-
-        if (check("typesy")) {
-            addChild(root, parseTypeDeclaration());
-        } else if (check("varsy")) {
-            addChild(root, parseVarDeclaration());
-        } else {
-            // token lain (misal proceduresy/functionsy), stop parsing declarations
-            break;
-        }
-
-        if (!errorMessage.empty()){
-            return root;
-        }
-
-        // safety: kalau tidak ada progress (token bukan const/type/var/begin), keluar
-        if (pos == before) break;
+    // var section (opsional, setelah type)
+    while (check("varsy")) {
+        addChild(root, parseVarDeclaration());
+        if (!errorMessage.empty()) return root;
     }
 
     return root;

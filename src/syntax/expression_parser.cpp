@@ -23,7 +23,10 @@ NodePtr ExpressionParser::parseFactor(){
     NodePtr node = makeNode("<factor>");
     Token t = currentToken();
     if (t.type == "intcon" || t.type == "realcon" || t.type == "charcon" || t.type == "string") {
-        addChild(node, makeNode(t.type + "(" + t.value + ")"));
+        string label = t.type;
+        if (t.type == "charcon" || t.type == "string") label += "('" + t.value + "')";
+        else label += "(" + t.value + ")";
+        addChild(node, makeNode(label));
         advance();
     } else if (t.type == "ident") {
         Token n = peek();
@@ -111,7 +114,10 @@ NodePtr ExpressionParser::parseIndexList() {
     NodePtr node = makeNode("<index-list>");
     Token t = currentToken();
     if (t.type == "intcon" || t.type == "charcon" || t.type == "ident") {
-        addChild(node, makeNode(t.type + "(" + t.value + ")"));
+        string label = t.type;
+        if (t.type == "charcon") label += "('" + t.value + "')";
+        else label += "(" + t.value + ")";
+        addChild(node, makeNode(label));
         advance();
     } else {
         consume("intcon", "Expected intcon, charcon, or ident");

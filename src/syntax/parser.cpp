@@ -164,15 +164,23 @@ NodePtr Parser::parseCompoundStatement() {
 NodePtr Parser::parseStatementList() {
     NodePtr node = makeNode("<statement-list>");
 
-    NodePtr s = parseStatement();
-    addChild(node, s);
+    NodePtr prev = parseStatement();
+    addChild(node, prev);
 
     while (check("semicolon")) {
         advance();
-        addChild(node, makeNode("semicolon"));
-        if (check("endsy")) break; //trailing ';' sebelum END, stop
+        NodePtr semi = makeNode("semicolon");
+        if (check("endsy")) {
+            // trailing ';' sebelum END
+            if (prev && prev->label == "<procedure/function-call>") addChild(prev, semi);
+            else addChild(node, semi);
+            break;
+        }
         NodePtr s2 = parseStatement();
+        if (prev && prev->label == "<procedure/function-call>") addChild(prev, semi);
+        else addChild(node, semi);
         addChild(node, s2);
+        prev = s2;
     }
 
     return node;
@@ -198,9 +206,9 @@ NodePtr Parser::parseDeclaration() {
 }
 
 NodePtr Parser::parseStatement() {
-    //statement boleh kosong (ε), tetap bikin node biar tree konsisten
+    //statement boleh kosong (ε), return nullptr biar ga muncul di tree
     if (check("endsy") || check("semicolon") || check("elsesy") || check("untilsy") || isAtEnd()) {
-        return makeNode("<empty-statement>");
+        return nullptr;
     }
 
     if (check("beginsy")) {
