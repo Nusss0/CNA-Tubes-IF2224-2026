@@ -2,47 +2,66 @@
 
 
 int main() {
-   //file name input 
+   // Choose input mode
+   cout << "[1] Source code file (run lexer + parser)\n";
+   cout << "[2] Token file       (skip lexer, run parser only)\n";
+   int mode = 0;
+   while (mode != 1 && mode != 2) {
+      cout << "Choose input mode: ";
+      cin >> mode;
+      if (mode != 1 && mode != 2) {
+         cout << "[ERROR] Unknown Options !!\n";
+         cin.clear();
+         cin.ignore(10000, '\n');
+      }
+   }
+
    string path, fileName;
    cout << "[NOTES] : Just use filename without path\n";
    cout << "Enter file path: ";
    cin >> fileName;
    path = "test/M1/" + fileName;
 
-   //file processing
-   string raw;
-   raw = DFAFileReader(path); //masukan seluruh code ke 1 line string
+   vector<Token> tokens;
 
-   vector<Token> tokens = Tokenizing(raw); //tokenisasi ke tokens
+   if (mode == 1) {
+      // Source-code mode: read raw -> tokenize -> print -> optional export
+      string raw = DFAFileReader(path);
+      tokens = Tokenizing(raw);
 
-   TokenPrinter(tokens); //output ke CLI dlu
+      TokenPrinter(tokens);
 
-   //file output process
-   char op;
-   cout << "Export to file ? [N/y]\n";
-   cin >> op;
-   bool restart = true;
-   while (restart){
-      if(op == 'Y'||op == 'y'){
-         while (restart){
-            cout << "Input File Name : ";
-            cin >> fileName;
-            path = "test/M1/" + fileName;
-            if(!IsFileExist(path)){ //file harus tidak exist baru bisa dilanjutkan 
-               PrintTokenToFile(path,tokens);   
-               restart = false; //tidak perlu restart
-            }
-            else{ //tidak ingin override, berarti harus ulang input file name
-               restart = true; //input ulang file name
+      char op;
+      cout << "Export to file ? [N/y]\n";
+      cin >> op;
+      bool restart = true;
+      while (restart){
+         if(op == 'Y'||op == 'y'){
+            while (restart){
+               cout << "Input File Name : ";
+               cin >> fileName;
+               path = "test/M1/" + fileName;
+               if(!IsFileExist(path)){
+                  PrintTokenToFile(path,tokens);
+                  restart = false;
+               }
+               else{
+                  restart = true;
+               }
             }
          }
+         else if(op == 'N'||op=='n'){
+            restart = false;
+         }
+         else{
+            cout << "[ERROR] Unknown Options !!\n";
+            cin >> op;
+         }
       }
-      else if(op == 'N'||op=='n'){
-         restart = false; //end of program
-      }
-      else{
-         cout << "[ERROR] Unknown Options !!\n"; //restart masih true, akan minta keputusan export file
-      }
+   } else {
+      // Token-file mode: skip lexer, load tokens directly
+      tokens = TokenFileReader(path);
+      cout << "[INFO] Loaded " << tokens.size() << " tokens from file.\n";
    }
 
    // ---------------- Syntax Analysis (Recursive Descent) ----------------
@@ -61,11 +80,12 @@ int main() {
    char op2;
    cin >> op2;
    if (op2 == 'Y' || op2 == 'y') {
+      std::filesystem::create_directories("test/M2");
       bool retry = true;
       while (retry) {
          cout << "Input File Name : ";
          cin >> fileName;
-         path = "test/M1/" + fileName;
+         path = "test/M2/" + fileName;
          if (!IsFileExist(path)) {
             saveTreeToFile(root, path);
             retry = false;
