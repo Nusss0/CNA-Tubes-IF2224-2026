@@ -1,4 +1,6 @@
 #include "stmt_sbpgr_parser.hpp"
+#include "declaration_parser.hpp"
+#include "expression_parser.hpp"
 #include <iostream>
 
 StatementSubprogramParser::StatementSubprogramParser(const vector<Token>& tokens) {
@@ -17,6 +19,14 @@ void StatementSubprogramParser::setPosition(size_t pos) {
 
 size_t StatementSubprogramParser::getPosition() const {
     return pos;
+}
+
+void StatementSubprogramParser::setDeclParser(DeclarationParser* p) {
+    declParser_ = p;
+}
+
+void StatementSubprogramParser::setExprParser(ExpressionParser* p) {
+    exprParser_ = p;
 }
 
 NodePtr StatementSubprogramParser::parseStatement() {
@@ -374,38 +384,72 @@ NodePtr StatementSubprogramParser::parseParameterGroup() {
 }
 
 NodePtr StatementSubprogramParser::parseExpression() {
-    // placeholder untuk parser expression
-    return makeNode("expression");
-}
-
-NodePtr StatementSubprogramParser::parseStatementList() {
-    // placeholder untuk parser statement list
-    return makeNode("statement-list");
+    if (!exprParser_) return makeNode("expression");
+    exprParser_->setPosition(pos);
+    NodePtr n = exprParser_->parseExpression();
+    pos = exprParser_->getPosition();
+    return n;
 }
 
 NodePtr StatementSubprogramParser::parseConstant() {
-    // placeholder untuk parser constant
-    return makeNode("constant");
+    if (!declParser_) return makeNode("constant");
+    declParser_->setPosition(pos);
+    NodePtr n = declParser_->parseConstant();
+    pos = declParser_->getPosition();
+    return n;
 }
 
 NodePtr StatementSubprogramParser::parseDeclarationPart() {
-    // placeholder untuk parser declaration part
-    return makeNode("declaration-part");
-}
-
-NodePtr StatementSubprogramParser::parseCompoundStatement() {
-    // placeholder untuk parser compound statement
-    return makeNode("compound-statement");
+    if (!declParser_) return makeNode("declaration-part");
+    declParser_->setPosition(pos);
+    NodePtr n = declParser_->parseDeclarationPart();
+    pos = declParser_->getPosition();
+    return n;
 }
 
 NodePtr StatementSubprogramParser::parseIdentifierList() {
-    // placeholder untuk parser identifier list
-    return makeNode("identifier-list");
+    if (!declParser_) return makeNode("identifier-list");
+    declParser_->setPosition(pos);
+    NodePtr n = declParser_->parseIdentifierList();
+    pos = declParser_->getPosition();
+    return n;
 }
 
 NodePtr StatementSubprogramParser::parseArrayType() {
-    // placeholder untuk parser array type
-    return makeNode("array-type");
+    if (!declParser_) return makeNode("array-type");
+    declParser_->setPosition(pos);
+    NodePtr n = declParser_->parseArrayType();
+    pos = declParser_->getPosition();
+    return n;
+}
+
+NodePtr StatementSubprogramParser::parseStatementList() {
+    NodePtr node = makeNode("statement-list");
+    size_t before = pos;
+    addChild(node, parseStatement());
+    if (pos == before && !isAtEnd() && currentToken().type != "semicolon") {
+        // parseStatement gagal maju di token tak dikenal -> hindari infinite loop
+        return node;
+    }
+    while (currentToken().type == "semicolon") {
+        consume("semicolon", "");
+        addChild(node, makeNode("semicolon"));
+        if (currentToken().type == "endsy" || currentToken().type == "untilsy" || isAtEnd()) break;
+        size_t b = pos;
+        addChild(node, parseStatement());
+        if (pos == b && currentToken().type != "semicolon") break;
+    }
+    return node;
+}
+
+NodePtr StatementSubprogramParser::parseCompoundStatement() {
+    NodePtr node = makeNode("compound-statement");
+    consume("beginsy", "Expected 'begin'");
+    addChild(node, makeNode("beginsy"));
+    addChild(node, parseStatementList());
+    consume("endsy", "Expected 'end'");
+    addChild(node, makeNode("endsy"));
+    return node;
 }
 
 Token StatementSubprogramParser::currentToken() const {

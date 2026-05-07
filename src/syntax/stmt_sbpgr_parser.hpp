@@ -3,6 +3,9 @@
 #include "../lexical/token_processing.hpp"
 #include "parse_tree.hpp"
 
+class DeclarationParser;
+class ExpressionParser;
+
 class StatementSubprogramParser {
     public:
         // konstruktor
@@ -13,6 +16,10 @@ class StatementSubprogramParser {
         void setTokens(const vector<Token> &tokens);
         void setPosition(size_t pos);
         size_t getPosition() const;
+
+        // peer parser injection (dipakai utk delegasi internal stub)
+        void setDeclParser(DeclarationParser* p);
+        void setExprParser(ExpressionParser* p);
 
         // parser untuk statements
         NodePtr parseStatement();
@@ -52,6 +59,10 @@ class StatementSubprogramParser {
         // atribut
         vector<Token> tokens;
         size_t pos = 0;
+
+        // peer parsers (non-owning)
+        DeclarationParser* declParser_ = nullptr;
+        ExpressionParser* exprParser_ = nullptr;
 
         // helper untuk mengecek token
         Token currentToken() const;
