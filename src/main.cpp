@@ -17,7 +17,6 @@ int main() {
    }
 
    string path, fileName;
-   cout << "[NOTES] : Path relatif ke folder test/ (mis. M1/input1.txt, report/input-1.txt)\n";
    cout << "Enter file path: ";
    cin >> fileName;
    path = "test/" + fileName;
