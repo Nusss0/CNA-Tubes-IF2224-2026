@@ -6,6 +6,14 @@ const string& DeclarationParser::error() const {
     return errorMessage;
 }
 
+void DeclarationParser::setPosition(size_t p) {
+    pos = p;
+}
+
+size_t DeclarationParser::getPosition() const {
+    return pos;
+}
+
 const Token* DeclarationParser::peek(size_t offset) const {
     // Lookahead token tanpa memindahkan posisi parser
     size_t index = pos + offset;
@@ -90,27 +98,31 @@ NodePtr DeclarationParser::parseDeclarationPart() {
     }
 
     while (!end() && !check("beginsy")) {
+        size_t before = pos;
 
         // sequential (harus urut)
         if (check("constsy")) {
             addChild(root, parseConstDeclaration());
-        } 
+        }
 
         if (!errorMessage.empty()){
             return root;
         }
-        
+
         if (check("typesy")) {
             addChild(root, parseTypeDeclaration());
-        }  
+        }
 
         if (!errorMessage.empty()){
             return root;
         }
-        
+
         if (check("varsy")) {
             addChild(root, parseVarDeclaration());
-        } 
+        }
+
+        // safety: kalau tidak ada progress (token bukan const/type/var/begin), keluar
+        if (pos == before) break;
     }
 
     return root;

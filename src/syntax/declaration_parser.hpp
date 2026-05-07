@@ -11,7 +11,19 @@ public:
 
     // Parsing deklarasi
     NodePtr parseDeclarationPart();
-    
+
+    // Promoted: dipanggil dari Parser dan StatementSubprogramParser dengan pos-sync
+    NodePtr parseConstDeclaration();
+    NodePtr parseTypeDeclaration();
+    NodePtr parseVarDeclaration();
+    NodePtr parseConstant();
+    NodePtr parseIdentifierList();
+    NodePtr parseArrayType();
+
+    // Pos-sync API (cocok dgn ExpressionParser / StatementSubprogramParser)
+    void setPosition(size_t p);
+    size_t getPosition() const;
+
     // Ambil last error msg
     const string& error() const;
 
@@ -51,16 +63,10 @@ private:
     bool isRangeAhead(size_t offset = 0) const;
 
     NodePtr parseProgramHeader(); // program header
-    NodePtr parseConstDeclaration(); // const dec
-    NodePtr parseTypeDeclaration(); // type dec
-    NodePtr parseVarDeclaration(); // var dec
-    NodePtr parseIdentifierList(); // identifier
     NodePtr parseType(); // type
-    NodePtr parseArrayType(); // array type
     NodePtr parseRange(); // range constant..constant
     NodePtr parseEnumerated(); // enumerated
     NodePtr parseRecordType(); // record type
     NodePtr parseFieldList(); // field list
     NodePtr parseFieldPart(); // field part
-    NodePtr parseConstant(); // constant untuk deklarasi dan range
 };
