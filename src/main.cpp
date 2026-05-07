@@ -17,10 +17,10 @@ int main() {
    }
 
    string path, fileName;
-   cout << "[NOTES] : Just use filename without path\n";
+   cout << "[NOTES] : Path relatif ke folder test/ (mis. M1/input1.txt, report/input-1.txt)\n";
    cout << "Enter file path: ";
    cin >> fileName;
-   path = "test/M1/" + fileName;
+   path = "test/" + fileName;
 
    vector<Token> tokens;
 
@@ -47,7 +47,7 @@ int main() {
             while (restart){
                cout << "Input File Name : ";
                cin >> fileName;
-               path = "test/M1/" + fileName;
+               path = "test/" + fileName;
                if(!IsFileExist(path)){
                   PrintTokenToFile(path,tokens);
                   restart = false;
@@ -87,12 +87,11 @@ int main() {
    char op2;
    cin >> op2;
    if (op2 == 'Y' || op2 == 'y') {
-      std::filesystem::create_directories("test/M2");
       bool retry = true;
       while (retry) {
          cout << "Input File Name : ";
          cin >> fileName;
-         path = "test/M2/" + fileName;
+         path = "test/" + fileName;
          if (!IsFileExist(path)) {
             saveTreeToFile(root, path);
             retry = false;
