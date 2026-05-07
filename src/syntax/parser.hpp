@@ -3,6 +3,9 @@
 #include "../std.hpp"
 #include "../lexical/token_processing.hpp"
 #include "parse_tree.hpp"
+#include "declaration_parser.hpp"
+#include "expression_parser.hpp"
+#include "stmt_sbpgr_parser.hpp"
 
 struct ParseError {
     string message;
@@ -46,6 +49,10 @@ private:
     const vector<Token>& tokens;
     int pos;
     vector<ParseError> errors;
+
+    DeclarationParser declParser;
+    ExpressionParser exprParser;
+    StatementSubprogramParser stmtParser;
 
     void skipTrivia(); //auto-skip token komentar
     void synchronize(const vector<string>& syncTypes); //panic-mode recovery

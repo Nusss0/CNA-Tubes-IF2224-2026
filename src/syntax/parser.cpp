@@ -1,6 +1,10 @@
 #include "parser.hpp"
 
-Parser::Parser(const vector<Token>& toks) : tokens(toks), pos(0) {
+Parser::Parser(const vector<Token>& toks)
+    : tokens(toks), pos(0),
+      declParser(toks), exprParser(toks), stmtParser(toks) {
+    stmtParser.setDeclParser(&declParser);
+    stmtParser.setExprParser(&exprParser);
     skipTrivia();
 }
 
@@ -100,16 +104,16 @@ NodePtr Parser::parseProgramHeader() {
         synchronize({"semicolon", "varsy", "constsy", "typesy", "proceduresy", "functionsy", "beginsy"});
         return node;
     }
-    addChild(node, makeNode("PROGRAM"));
+    addChild(node, makeNode("programsy"));
 
     if (check("ident")) {
-        addChild(node, makeNode("ident: " + peek().value));
+        addChild(node, makeNode("ident(" + peek().value + ")"));
         advance();
     } else {
         reportError("Expected program name (ident) after PROGRAM");
     }
 
-    if (expect("semicolon", "<program-header>")) addChild(node, makeNode(";"));
+    if (expect("semicolon", "<program-header>")) addChild(node, makeNode("semicolon"));
 
     return node;
 }
@@ -119,9 +123,10 @@ NodePtr Parser::parseDeclarationPart() {
 
     //declaration diawali salah satu dari 5 keyword ini
     while (check("constsy") || check("typesy") || check("varsy") || check("proceduresy") || check("functionsy")) {
+        int before = pos;
         NodePtr d = parseDeclaration();
         if (d) addChild(node, d);
-        else break; //jaga-jaga supaya ga infinite loop kalau stub gagal maju
+        if (pos == before) break; //safety: cegah infinite loop kalau sub-parser ga maju
     }
 
     if (node->children.empty()) addChild(node, makeNode("(empty)"));
@@ -135,7 +140,7 @@ NodePtr Parser::parseCompoundStatement() {
         synchronize({"endsy", "period"});
         return node;
     }
-    addChild(node, makeNode("BEGIN"));
+    addChild(node, makeNode("beginsy"));
 
     NodePtr list = parseStatementList();
     if (list) addChild(node, list);
@@ -160,19 +165,34 @@ NodePtr Parser::parseStatementList() {
     return node;
 }
 
-//---- stub, blm diimplementasi ----
+//---- delegated to sub-parsers ----
 
 NodePtr Parser::parseDeclaration() {
-    //telan keyword section + isinya sampai ketemu section lain / BEGIN
     NodePtr node = makeNode("<declaration>");
 
-    const Token& head = peek();
-    addChild(node, makeNode("[stub: " + head.type + "]"));
-    advance(); //consume keyword section
+    const string& head = peek().type;
+    NodePtr inner;
 
-    while (!isAtEnd() && !check("constsy") && !check("typesy") && !check("varsy") && !check("proceduresy") && !check("functionsy") && !check("beginsy")) {
+    if (head == "constsy" || head == "typesy" || head == "varsy") {
+        declParser.setPosition((size_t)pos);
+        if (head == "constsy")      inner = declParser.parseConstDeclaration();
+        else if (head == "typesy")  inner = declParser.parseTypeDeclaration();
+        else                        inner = declParser.parseVarDeclaration();
+        pos = (int)declParser.getPosition();
+        if (!declParser.error().empty()) {
+            reportError(declParser.error());
+        }
+    } else if (head == "proceduresy" || head == "functionsy") {
+        stmtParser.setPosition((size_t)pos);
+        inner = stmtParser.parseSubprogramDeclaration();
+        pos = (int)stmtParser.getPosition();
+    } else {
+        reportError("Expected declaration keyword in <declaration>");
         advance();
+        return node;
     }
+
+    if (inner) addChild(node, inner);
     return node;
 }
 
@@ -191,13 +211,9 @@ NodePtr Parser::parseStatement() {
         return node;
     }
 
-    //telan token sampai ';' atau END, dump sebagai placeholder
-    string buf = "[stub:";
-    while (!isAtEnd() && !check("semicolon") && !check("endsy")) {
-        buf += " " + tokenDisplay(peek());
-        advance();
-    }
-    buf += "]";
-    addChild(node, makeNode(buf));
+    stmtParser.setPosition((size_t)pos);
+    NodePtr inner = stmtParser.parseStatement();
+    pos = (int)stmtParser.getPosition();
+    if (inner) addChild(node, inner);
     return node;
 }
