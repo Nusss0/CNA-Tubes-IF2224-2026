@@ -21,6 +21,15 @@ int main() {
    cin >> fileName;
    path = "test/" + fileName;
 
+   //cek input file ada (pakai ifstream langsung, bukan IsFileExist krn dia nge-prompt override)
+   {
+      ifstream check(path);
+      if (!check.good()) {
+         cout << "[ERROR] File not found: " << path << " !\n";
+         return 1;
+      }
+   }
+
    vector<Token> tokens;
 
    if (mode == 1) {
