@@ -7,6 +7,8 @@ struct Token;
 //Read everything from file and return it into one single line string.
 string DFAFileReader(const string fileName);
 
+// Reconstruct vector<Token> from a token file produced by PrintTokenToFile.
+vector<Token> TokenFileReader(const string& path);
 
 void TokenPrinter(const vector<Token> &tokens);
 void PrintTokenToFile(const string fileName, const vector<Token> &tokens);

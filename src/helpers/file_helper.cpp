@@ -18,6 +18,36 @@ string DFAFileReader(const string fileName){
     return res;
 }
 
+vector<Token> TokenFileReader(const string& path){
+    ifstream f(path);
+    vector<Token> tokens;
+
+    if(!f.is_open()){
+        cerr << "File not found !!!\n";
+        return tokens;
+    }
+
+    string line;
+    while(getline(f, line)){
+        if(!line.empty() && line.back() == '\r') line.pop_back();
+        if(line.empty()) continue;
+
+        Token t;
+        size_t lp = line.find('(');
+        size_t rp = line.rfind(')');
+        if(lp != string::npos && rp != string::npos && lp < rp){
+            t.type = line.substr(0, lp);
+            t.value = line.substr(lp + 1, rp - lp - 1);
+        } else {
+            t.type = line;
+            t.value = "";
+        }
+        tokens.push_back(t);
+    }
+
+    return tokens;
+}
+
 void TokenPrinter(const vector<Token> &tokens){
     for(auto &t : tokens){
         if(t.value.empty()){
