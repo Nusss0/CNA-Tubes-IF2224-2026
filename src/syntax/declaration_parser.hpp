@@ -15,6 +15,15 @@ public:
     // Ambil last error msg
     const string& error() const;
 
+    // pos getter/setter buat wiring ke Parser utama
+    size_t getPosition() const;
+    void setPosition(size_t p);
+
+    // method yang dipake parser lain
+    NodePtr parseIdentifierList();
+    NodePtr parseArrayType();
+    NodePtr parseConstant();
+
 private:
     const vector<Token>& tokens;
     size_t pos;
@@ -54,13 +63,10 @@ private:
     NodePtr parseConstDeclaration(); // const dec
     NodePtr parseTypeDeclaration(); // type dec
     NodePtr parseVarDeclaration(); // var dec
-    NodePtr parseIdentifierList(); // identifier
     NodePtr parseType(); // type
-    NodePtr parseArrayType(); // array type
     NodePtr parseRange(); // range constant..constant
     NodePtr parseEnumerated(); // enumerated
     NodePtr parseRecordType(); // record type
     NodePtr parseFieldList(); // field list
     NodePtr parseFieldPart(); // field part
-    NodePtr parseConstant(); // constant untuk deklarasi dan range
 };

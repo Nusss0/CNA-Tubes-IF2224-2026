@@ -15,6 +15,13 @@ int main() {
 
    vector<Token> tokens = Tokenizing(raw); //tokenisasi ke tokens
 
+   // filter token komentar biar parser ga perlu pusing
+   vector<Token> filtered;
+   for (const auto& t : tokens) {
+      if (t.type != "comment") filtered.push_back(t);
+   }
+   tokens.swap(filtered);
+
    TokenPrinter(tokens); //output ke CLI dlu
 
    //file output process

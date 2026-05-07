@@ -6,6 +6,14 @@ const string& DeclarationParser::error() const {
     return errorMessage;
 }
 
+size_t DeclarationParser::getPosition() const {
+    return pos;
+}
+
+void DeclarationParser::setPosition(size_t p) {
+    pos = p;
+}
+
 const Token* DeclarationParser::peek(size_t offset) const {
     // Lookahead token tanpa memindahkan posisi parser
     size_t index = pos + offset;
@@ -94,23 +102,18 @@ NodePtr DeclarationParser::parseDeclarationPart() {
         // sequential (harus urut)
         if (check("constsy")) {
             addChild(root, parseConstDeclaration());
-        } 
-
-        if (!errorMessage.empty()){
-            return root;
-        }
-        
-        if (check("typesy")) {
+        } else if (check("typesy")) {
             addChild(root, parseTypeDeclaration());
-        }  
+        } else if (check("varsy")) {
+            addChild(root, parseVarDeclaration());
+        } else {
+            // token lain (misal proceduresy/functionsy), stop parsing declarations
+            break;
+        }
 
         if (!errorMessage.empty()){
             return root;
         }
-        
-        if (check("varsy")) {
-            addChild(root, parseVarDeclaration());
-        } 
     }
 
     return root;
