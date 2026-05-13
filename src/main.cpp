@@ -19,7 +19,12 @@ int main() {
    string path, fileName;
    cout << "Enter file path: ";
    cin >> fileName;
-   path = "test/" + fileName;
+   if(mode == 1){
+      path = "test/M1/" + fileName;
+   } else {
+      path = "test/M2/" + fileName;
+   }
+
 
    //cek input file ada (pakai ifstream langsung, bukan IsFileExist krn dia nge-prompt override)
    {
