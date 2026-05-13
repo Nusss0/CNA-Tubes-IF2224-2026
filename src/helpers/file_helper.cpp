@@ -48,6 +48,52 @@ vector<Token> TokenFileReader(const string& path){
     return tokens;
 }
 
+vector<Token> LoadTokens(const string& path){
+    ifstream f(path);
+    vector<Token> tokens;
+
+    if(!f.is_open()){
+        cerr << "File not found !!!\n";
+        return tokens;
+    }
+
+    string line;
+    int checked = 0;
+    int tokenLike = 0;
+    
+    // cek 8 baris aja
+    while(getline(f, line) && checked < 8){
+        if(!line.empty() && line.back() == '\r') line.pop_back();
+        if(line.empty()) continue;
+        checked++;
+
+        size_t lp = line.find('(');
+        size_t rp = line.rfind(')');
+        bool isTypeOnly = (lp == string::npos && rp == string::npos && line.find(' ') == string::npos && line.find('\t') == string::npos);
+        bool isTypeValue = (lp != string::npos && rp == line.size() - 1 && lp < rp && line.substr(0, lp).find(' ') == string::npos &&
+                            line.substr(0, lp).find('\t') == string::npos);
+
+        if(isTypeOnly || isTypeValue){
+            tokenLike++;
+        }
+    }
+
+    bool TokenFile = (checked > 0 && tokenLike == checked);
+    if(TokenFile){
+        return TokenFileReader(path);
+    }
+
+    // run lexer and remove comment tokens before parser (raw file)
+    string raw = DFAFileReader(path);
+    tokens = Tokenizing(raw);
+
+    vector<Token> filtered;
+    for(const auto& t : tokens){
+        if(t.type != "comment") filtered.push_back(t);
+    }
+    return filtered;
+}
+
 void TokenPrinter(const vector<Token> &tokens){
     for(auto &t : tokens){
         if(t.value.empty()){

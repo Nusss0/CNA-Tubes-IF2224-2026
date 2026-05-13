@@ -19,10 +19,23 @@ int main() {
    string path, fileName;
    cout << "Enter file path: ";
    cin >> fileName;
+
    if(mode == 1){
       path = "test/M1/" + fileName;
    } else {
-      path = "test/M2/" + fileName;
+      // accept file from folder M1/M2
+      vector<string> candidates = {
+         "test/M2/" + fileName,
+         "test/M1/" + fileName
+      };
+      path = candidates[0];
+      for (const auto& p : candidates) {
+         ifstream check(p);
+         if (check.good()) {
+            path = p;
+            break;
+         }
+      }
    }
 
 
@@ -79,8 +92,8 @@ int main() {
          }
       }
    } else {
-      // Token-file mode: skip lexer, load tokens directly
-      tokens = TokenFileReader(path);
+      // Flexible mode: accept either token file or raw source file.
+      tokens = LoadTokens(path);
       cout << "[INFO] Loaded " << tokens.size() << " tokens from file.\n";
    }
 

@@ -10,6 +10,9 @@ string DFAFileReader(const string fileName);
 // Reconstruct vector<Token> from a token file produced by PrintTokenToFile.
 vector<Token> TokenFileReader(const string& path);
 
+// Load tokens from token file format or raw source file format.
+vector<Token> LoadTokens(const string& path);
+
 void TokenPrinter(const vector<Token> &tokens);
 void PrintTokenToFile(const string fileName, const vector<Token> &tokens);
 bool IsFileExist(const string path);
