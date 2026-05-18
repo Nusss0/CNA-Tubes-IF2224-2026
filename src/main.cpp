@@ -17,26 +17,9 @@ int main() {
    }
 
    string path, fileName;
-   cout << "Enter file path: ";
+   cout << "Enter file path (e.g. M1/foo.txt or M2/bar.txt): ";
    cin >> fileName;
-
-   if(mode == 1){
-      path = "test/M1/" + fileName;
-   } else {
-      // accept file from folder M1/M2
-      vector<string> candidates = {
-         "test/M2/" + fileName,
-         "test/M1/" + fileName
-      };
-      path = candidates[0];
-      for (const auto& p : candidates) {
-         ifstream check(p);
-         if (check.good()) {
-            path = p;
-            break;
-         }
-      }
-   }
+   path = "test/" + fileName;
 
 
    //cek input file ada (pakai ifstream langsung, bukan IsFileExist krn dia nge-prompt override)
