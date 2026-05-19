@@ -6,70 +6,70 @@
 
 // enum untuk menjelaskan tipe dari Objek
 enum class ObjClass {
-    UNDEFINED  = 0,
-    CONSTANT   = 1,
-    VARIABLE   = 2,
-    TYPE_DECL  = 3,
-    PROCEDURE  = 4,
-    FUNCTION   = 5,
-    PROGRAM    = 6
+    UNDEFINED = 0,
+    CONSTANT = 1,
+    VARIABLE = 2,
+    TYPE_DECL = 3,
+    PROCEDURE = 4,
+    FUNCTION = 5,
+    PROGRAM = 6
 };
 
 // enum untuk menentukan code dari tipe
 enum TypeCode {
-    TC_NOTYPE  = 0,
+    TC_NOTYPE = 0,
     TC_INTEGER = 1,
-    TC_REAL    = 2,
+    TC_REAL = 2,
     TC_BOOLEAN = 3,
-    TC_CHAR    = 4,
-    TC_STRING  = 5,
-    TC_ARRAY   = 6,
-    TC_RECORD  = 7
+    TC_CHAR = 4,
+    TC_STRING = 5,
+    TC_ARRAY = 6,
+    TC_RECORD = 7
 };
 
 // tab Index untuk reserved word
 namespace ReservedIdx {
-    constexpr int PROGRAM   = 19;
-    constexpr int FUNCTION  = 12;
+    constexpr int PROGRAM = 19;
+    constexpr int FUNCTION = 12;
     constexpr int PROCEDURE = 18;
-    constexpr int INTEGER   = 22;
-    constexpr int REAL      = 23;
-    constexpr int BOOLEAN   = 24;
-    constexpr int CHAR      = 25;
-    constexpr int STRING    = 26;
+    constexpr int INTEGER = 22;
+    constexpr int REAL = 23;
+    constexpr int BOOLEAN = 24;
+    constexpr int CHAR = 25;
+    constexpr int STRING = 26;
 }
 
 // == Struct == //
 
 //  struktur entry suatu table
 struct TabEntry {
-    string   id;    
-    int      link;   
-    int      obj;    
-    int      type;   
-    int      ref;    
-    bool     nrm;    
-    int      lev;    
-    int      adr;    
+    string id;    
+    int link;   
+    int obj;    
+    int type;   
+    int ref;    
+    bool nrm;    
+    int lev;    
+    int adr;    
 };
 
 // struktur satu baris dari sebuah entry block table
 struct BtabEntry {
-    int  last;   
-    int  lpar;   
-    int  psze;   
-    int  vsze;   
+    int last;   
+    int lpar;   
+    int psze;   
+    int vsze;   
 };
 
 // struktur satu entry untuk satu entry array table
 struct AtabEntry {
-    int  xtyp;   
-    int  etyp;   
-    int  eref;   
-    int  low;    
-    int  high;  
-    int  elsz;   
-    int  size;   
+    int xtyp;   
+    int etyp;   
+    int eref;   
+    int low;    
+    int high;  
+    int elsz;   
+    int size;   
 };
 
 // == Class == //
