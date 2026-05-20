@@ -112,18 +112,17 @@ AstNodePtr AstBuilder::buildProgram(const NodePtr& node) {
 AstNodePtr AstBuilder::buildDeclarationPart(const NodePtr& node) {
     auto block = makeAst(AstKind::Block);
     for (auto& c : node->children) {
-        if (c->label == "<var-declaration>") {
-            auto v = buildVarDeclaration(c);
-            if (v) addAstChild(block, v);
-        } else if (c->label == "<const-declaration>") {
-            auto v = buildConstDeclaration(c);
-            if (v) addAstChild(block, v);
-        } else if (c->label == "<type-declaration>") {
-            auto v = buildTypeDeclaration(c);
-            if (v) addAstChild(block, v);
-        } else if (c->label == "<subprogram-declaration>") {
-            auto v = buildSubprogram(c);
-            if (v) addAstChild(block, v);
+        AstNodePtr v;
+        if (c->label == "<var-declaration>")        v = buildVarDeclaration(c);
+        else if (c->label == "<const-declaration>") v = buildConstDeclaration(c);
+        else if (c->label == "<type-declaration>")  v = buildTypeDeclaration(c);
+        else if (c->label == "<subprogram-declaration>") v = buildSubprogram(c);
+        if (!v) continue;
+        //flatten: section builder return Block bungkus -> langsung serap child-nya
+        if (v->kind == AstKind::Block) {
+            for (auto& ch : v->children) addAstChild(block, ch);
+        } else {
+            addAstChild(block, v);
         }
     }
     return block;
