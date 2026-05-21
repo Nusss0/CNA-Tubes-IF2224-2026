@@ -107,4 +107,35 @@ int main() {
          }
       }
    }
+
+   // ---------------- Semantic Analysis: AST construction ----------------
+   //skip kalau parsing gagal total
+   if (!root) return 0;
+
+   cout << "\n=== Abstract Syntax Tree ===\n";
+   AstBuilder builder;
+   AstNodePtr ast = builder.build(root);
+   if (ast) printAst(ast);
+   if (builder.hasError()) {
+      cout << "\n[INFO] AST build finished with " << builder.getErrors().size()
+           << " error(s).\n";
+   } else {
+      cout << "\n[INFO] AST build finished successfully.\n";
+   }
+
+   cout << "Export AST to file ? [N/y]\n";
+   char op3;
+   cin >> op3;
+   if (op3 == 'Y' || op3 == 'y') {
+      bool retry = true;
+      while (retry) {
+         cout << "Input File Name : ";
+         cin >> fileName;
+         path = "test/" + fileName;
+         if (!IsFileExist(path)) {
+            saveAstToFile(ast, path);
+            retry = false;
+         }
+      }
+   }
 }

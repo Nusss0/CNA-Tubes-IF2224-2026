@@ -134,19 +134,26 @@ NodePtr Parser::parseStatementList() {
     NodePtr prev = parseStatement();
     addChild(node, prev);
 
-    while (check("semicolon")) {
-        advance();
-        NodePtr semi = makeNode("semicolon");
-        if (check("endsy")) {
-            // trailing ';' sblm END: kalau prev procedure-call attach ke prev,
-            // selain itu attach ke list. (preserves original tree shape)
+    while (true) {
+        // while/for udah consume ';' sendiri (revisi M3) → loop lanjut tanpa advance
+        bool ownsSemicolon = prev && (prev->label == "<while-statement>" || prev->label == "<for-statement>")
+                             && !prev->children.empty() && prev->children.back()->label == "semicolon";
+        if (!ownsSemicolon) {
+            if (!check("semicolon")) break;
+            advance();
+            NodePtr semi = makeNode("semicolon");
+            if (check("endsy")) {
+                if (prev && prev->label == "<procedure/function-call>") addChild(prev, semi);
+                else addChild(node, semi);
+                break;
+            }
             if (prev && prev->label == "<procedure/function-call>") addChild(prev, semi);
             else addChild(node, semi);
-            break;
+        } else {
+            // statement udah self-terminate, stop kalau abis itu ketemu END
+            if (check("endsy")) break;
         }
         NodePtr s2 = parseStatement();
-        if (prev && prev->label == "<procedure/function-call>") addChild(prev, semi);
-        else addChild(node, semi);
         addChild(node, s2);
         prev = s2;
     }
@@ -173,9 +180,9 @@ NodePtr Parser::parseDeclaration() {
 }
 
 NodePtr Parser::parseStatement() {
-    // statement boleh kosong (ε), return nullptr biar ga muncul di tree
+    // revisi M3: empty statement valid, muncul sbg <empty-statement> di tree
     if (check("endsy") || check("semicolon") || check("elsesy") || check("untilsy") || isAtEnd()) {
-        return nullptr;
+        return makeNode("<empty-statement>");
     }
 
     if (check("beginsy")) {

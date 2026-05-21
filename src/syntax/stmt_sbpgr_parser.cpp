@@ -18,9 +18,9 @@ NodePtr StatementSubprogramParser::parseStatement() {
             return parseAssignmentStatement();
         return parseProcedureFunctionCall();
     }
-    // empty statement (sblm ; / END / UNTIL / ELSE / EOF) ga dianggap error
+    // empty statement (sblm ; / END / UNTIL / ELSE / EOF), valid sesuai revisi M3
     if (t.type == "semicolon" || t.type == "endsy" || t.type == "untilsy" || t.type == "elsesy" || isAtEnd()) {
-        return nullptr;
+        return makeNode("<empty-statement>");
     }
     // token bener2 ga dikenali, catat error biar Parser utama tau
     if (errorMessage.empty()) errorMessage = "unexpected token at start of statement: " + t.type;
@@ -108,7 +108,11 @@ NodePtr StatementSubprogramParser::parseWhileStatement() {
     addChild(node, parseExpression());
     consume("dosy", "<while-statement>");
     addChild(node, makeNode("dosy"));
-    addChild(node, parseStatement());
+    // revisi M3: body wajib compound-statement, bkn single statement
+    addChild(node, parseCompoundStatement());
+    // semicolon trailing bagian dari produksi <while-statement>
+    if (match("semicolon")) addChild(node, makeNode("semicolon"));
+    else consume("semicolon", "<while-statement>");
     return node;
 }
 
@@ -147,7 +151,11 @@ NodePtr StatementSubprogramParser::parseForStatement() {
     addChild(node, parseExpression());
     consume("dosy", "<for-statement>");
     addChild(node, makeNode("dosy"));
-    addChild(node, parseStatement());
+    // revisi M3: body wajib compound-statement, bkn single statement
+    addChild(node, parseCompoundStatement());
+    // semicolon trailing bagian dari produksi <for-statement>
+    if (match("semicolon")) addChild(node, makeNode("semicolon"));
+    else consume("semicolon", "<for-statement>");
     return node;
 }
 
@@ -394,21 +402,26 @@ NodePtr StatementSubprogramParser::parseArrayType() {
 }
 
 NodePtr StatementSubprogramParser::parseStatementList() {
-    // dipake utk body repeat-until dan procedure body. di Parser utama
-    // ada versi sendiri yg juga punya logic semi-comma dipasang ke prev
     NodePtr node = makeNode("<statement-list>");
     size_t before = pos;
-    addChild(node, parseStatement());
-    // safety: stmt ga maju + bukan ; -> berhenti biar ga infinite loop
+    NodePtr prev = parseStatement();
+    addChild(node, prev);
     if (pos == before && !isAtEnd() && !check("semicolon")) {
         return node;
     }
-    while (check("semicolon")) {
-        advance();
-        addChild(node, makeNode("semicolon"));
+    while (true) {
+        // while/for udah consume ';' sendiri (revisi M3)
+        bool ownsSemicolon = prev && (prev->label == "<while-statement>" || prev->label == "<for-statement>")
+                             && !prev->children.empty() && prev->children.back()->label == "semicolon";
+        if (!ownsSemicolon) {
+            if (!check("semicolon")) break;
+            advance();
+            addChild(node, makeNode("semicolon"));
+        }
         if (check("endsy") || check("untilsy") || isAtEnd()) break;
         size_t b = pos;
-        addChild(node, parseStatement());
+        prev = parseStatement();
+        addChild(node, prev);
         if (pos == b && !check("semicolon")) break;
     }
     return node;
