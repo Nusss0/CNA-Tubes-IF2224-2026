@@ -173,14 +173,23 @@ int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, i
     return idx;
 }
 
-// implementasi method lookup untuk mencari first match dari sebuah tab entry 
+//compare case-insensitive (Pascal: ident ga case-sensitive)
+static bool sameId(const string& a, const string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (tolower(static_cast<unsigned char>(a[i])) != tolower(static_cast<unsigned char>(b[i]))) return false;
+    }
+    return true;
+}
+
+// implementasi method lookup untuk mencari first match dari sebuah tab entry
 int SymbolTable::lookup(const string& id) const {
     for (int lev = level; lev >= 0; --lev) {
         int blockIdx = display[lev];
         int idx = btab[blockIdx].last;
 
         while (idx != 0) {
-            if (tab[idx].id == id) return idx;
+            if (sameId(tab[idx].id, id)) return idx;
             idx = tab[idx].link;
         }
     }

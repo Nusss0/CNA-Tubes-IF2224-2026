@@ -25,8 +25,16 @@ int lookupCurrentScope(SymbolTable& symbols, const string& id) {
     const auto& btab = symbols.getBtab();
     int blockIdx = display[symbols.currentLevel()];
     int idx = btab[blockIdx].last;
+    //case-insensitive utk konsisten sm SymbolTable::lookup
+    auto eq = [](const string& a, const string& b) {
+        if (a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); ++i) {
+            if (tolower(static_cast<unsigned char>(a[i])) != tolower(static_cast<unsigned char>(b[i]))) return false;
+        }
+        return true;
+    };
     while (idx != 0) {
-        if (tab[idx].id == id) return idx;
+        if (eq(tab[idx].id, id)) return idx;
         idx = tab[idx].link;
     }
     return -1;
@@ -78,7 +86,10 @@ bool SemanticAnalyzer::isBoolean(const SemanticType& type) {
 
 bool SemanticAnalyzer::sameType(const SemanticType& lhs, const SemanticType& rhs) {
     if (lhs.type == TC_NOTYPE || rhs.type == TC_NOTYPE) return false;
-    if (lhs.type == rhs.type && lhs.name == rhs.name) return true;
+    //tipe primitif: cukup banding type code (nama bisa kosong krn variabel ga simpan nama tipe)
+    if (lhs.type == rhs.type && lhs.type != TC_ARRAY && lhs.type != TC_RECORD) return true;
+    //tipe komposit: butuh nama match krn anonymous record/array bisa beda walau struktur sama
+    if (lhs.type == rhs.type && lhs.name == rhs.name && !lhs.name.empty()) return true;
     if (lhs.name == "subrange" && rhs.type == TC_INTEGER) return true;
     if (rhs.name == "subrange" && lhs.type == TC_INTEGER) return true;
     return false;
@@ -693,7 +704,9 @@ SemanticType SemanticAnalyzer::visitTerm(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitFactor(const NodePtr& node) {
+    if (!node) return SemanticType{};
     for (const auto& child : node->children) {
+        if (!child) continue;
         if (child->label == "<variable>") return visitVariable(child);
         if (child->label == "<procedure/function-call>") return visitProcedureFunctionCall(child);
         if (child->label == "<expression>") return visitExpression(child);

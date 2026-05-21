@@ -138,4 +138,27 @@ int main() {
          }
       }
    }
+
+   // ---------------- Semantic Analysis: type & scope checking ----------------
+   cout << "\n=== Semantic Analysis ===\n";
+   SemanticAnalyzer analyzer;
+   analyzer.analyze(root);
+
+   cout << "\n--- Decorated Parse Tree ---\n";
+   analyzer.printDecoratedTree(root, cout);
+
+   cout << "\n--- Symbol Table (tab) ---\n";
+   analyzer.printTabDump(cout);
+   cout << "\n--- Block Table (btab) ---\n";
+   analyzer.printBTabDump(cout);
+   cout << "\n--- Array Table (atab) ---\n";
+   analyzer.printATabDump(cout);
+
+   if (analyzer.hasErrors()) {
+      cout << "\n[INFO] Semantic analysis finished with " << analyzer.getErrors().size()
+           << " error(s).\n";
+      for (const auto& e : analyzer.getErrors()) cout << e << "\n";
+   } else {
+      cout << "\n[INFO] Semantic analysis finished successfully.\n";
+   }
 }
