@@ -4,6 +4,11 @@
 struct ParseNode {
     string label;
     vector<shared_ptr<ParseNode>> children;
+    //semantic
+    int tab_index = -1;
+    int lev = -1;
+    int block_index = -1;
+    string sem_type;   // tipe semantic
 
     explicit ParseNode(const string& lbl) : label(lbl) {}
 };
