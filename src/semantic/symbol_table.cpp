@@ -122,28 +122,28 @@ void SymbolTable::initReservedWords() {
 
 // implementasi fungsi untuk initPredefined
 void SymbolTable::initPredefined() {
-    /* True */
+    /* true */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"True", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 1});
+        tab.push_back({"true", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 1});
     }
 
-    /* False */
+    /* false */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"False", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 0});
+        tab.push_back({"false", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 0});
     }
 
-    /* Readln */
+    /* readln */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"Readln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
+        tab.push_back({"readln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
     }
 
-    /* Writeln */
+    /* writeln */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"Writeln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
+        tab.push_back({"writeln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
     }
 }
 

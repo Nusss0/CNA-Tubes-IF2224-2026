@@ -143,8 +143,7 @@ int main() {
    cout << "\n=== Semantic Analysis ===\n";
    SemanticAnalyzer analyzer;
    analyzer.analyze(root);
-
-   cout << "\n--- Decorated Parse Tree ---\n";
+   cout << "\n--- Decorated Tree ---\n";
    analyzer.printDecoratedTree(root, cout);
 
    cout << "\n--- Symbol Table (tab) ---\n";
@@ -155,9 +154,11 @@ int main() {
    analyzer.printATabDump(cout);
 
    if (analyzer.hasErrors()) {
-      cout << "\n[INFO] Semantic analysis finished with " << analyzer.getErrors().size()
-           << " error(s).\n";
-      for (const auto& e : analyzer.getErrors()) cout << e << "\n";
+      cout << "\n[INFO] Semantic analysis finished with "
+           << analyzer.getErrors().size() << " error(s):\n";
+      for (const auto& err : analyzer.getErrors()) {
+         cout << "  " << err << "\n";
+      }
    } else {
       cout << "\n[INFO] Semantic analysis finished successfully.\n";
    }

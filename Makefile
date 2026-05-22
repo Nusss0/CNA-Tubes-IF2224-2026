@@ -1,5 +1,6 @@
 CXX      = g++
 CXXFLAGS = -Wall -Wextra -std=c++17 -g
+GDB      = gdb
 
 SRC_DIR  = src
 BIN_DIR  = bin
@@ -9,7 +10,7 @@ TARGET   = $(BIN_DIR)/compiler
 SRCS = $(shell find $(SRC_DIR) -name '*.cpp')
 OBJS = $(patsubst $(SRC_DIR)/%.cpp,$(BIN_DIR)/%.o,$(SRCS))
 
-.PHONY: all clean run
+.PHONY: all clean run debug
 
 all: $(TARGET)
 
@@ -22,6 +23,10 @@ $(BIN_DIR)/%.o: $(SRC_DIR)/%.cpp
 
 run: $(TARGET)
 	./$(TARGET) $(filter-out $@,$(MAKECMDGOALS))
+
+debug: CXXFLAGS += -O0 -g3
+debug: clean $(TARGET)
+	$(GDB) ./$(TARGET)
 
 clean:
 	find $(BIN_DIR) -name '*.o' -delete 2>/dev/null; rm -f $(TARGET)
