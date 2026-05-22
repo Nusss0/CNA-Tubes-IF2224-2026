@@ -2,14 +2,6 @@
 
 // helper
 namespace {
-string toLowerCopy(string text) {
-    for (char& c : text){
-        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-    }
-
-    return text;
-}
-
 bool isIdentLabel(const string& label, string& value) {
     if (label.rfind("ident(", 0) != 0) return false;
     auto begin = label.find('(');
@@ -17,6 +9,19 @@ bool isIdentLabel(const string& label, string& value) {
     if (begin == string::npos || end == string::npos || end <= begin + 1) return false;
     value = label.substr(begin + 1, end - begin - 1);
     return true;
+}
+
+// simbol operator utk pesan error
+string opSymbol(const string& label) {
+    if (label == "plus") return "+";
+    if (label == "minus") return "-";
+    if (label == "times") return "*";
+    if (label == "rdiv") return "/";
+    if (label == "idiv") return "div";
+    if (label == "imod") return "mod";
+    if (label == "andsy") return "and";
+    if (label == "orsy") return "or";
+    return label;
 }
 
 int lookupCurrentScope(SymbolTable& symbols, const string& id) {
@@ -35,60 +40,58 @@ int lookupCurrentScope(SymbolTable& symbols, const string& id) {
 }
 
 SemanticAnalyzer::SemanticAnalyzer() = default;
-
 SemanticType SemanticAnalyzer::basicType(const string& name) {
-    SemanticType t;
-    string lowered = toLowerCopy(name);
-    if (lowered == "integer") t.type = TC_INTEGER;
-    else if (lowered == "real") t.type = TC_REAL;
-    else if (lowered == "char") t.type = TC_CHAR;
-    else if (lowered == "boolean") t.type = TC_BOOLEAN;
-    else if (lowered == "string") t.type = TC_STRING;
-    else if (lowered == "void") t.type = TC_NOTYPE;
-    else t.type = TC_NOTYPE;
-    t.name = lowered;
-    return t;
+    return TypeCheck::makeBasic(name);
 }
 
 string SemanticAnalyzer::TypeName(int type) {
-    switch (type) {
-        case TC_INTEGER: return "integer";
-        case TC_REAL: return "real";
-        case TC_BOOLEAN: return "boolean";
-        case TC_CHAR: return "char";
-        case TC_STRING: return "string";
-        case TC_ARRAY: return "array";
-        case TC_RECORD: return "record";
-        default: return "unknown";
-    }
+    return TypeCheck::typeCodeName(type);
 }
 
 string SemanticAnalyzer::typeName(const SemanticType& type) {
-    if (!type.name.empty()) return type.name;
-    return TypeName(type.type);
+    return TypeCheck::describe(type);
 }
 
 bool SemanticAnalyzer::isNumeric(const SemanticType& type) {
-    return type.type == TC_INTEGER || type.type == TC_REAL || type.name == "subrange";
+    return TypeCheck::isNumeric(type);
 }
 
 bool SemanticAnalyzer::isBoolean(const SemanticType& type) {
-    return type.type == TC_BOOLEAN;
+    return TypeCheck::isBoolean(type);
 }
 
 bool SemanticAnalyzer::sameType(const SemanticType& lhs, const SemanticType& rhs) {
-    if (lhs.type == TC_NOTYPE || rhs.type == TC_NOTYPE) return false;
-    if (lhs.type == rhs.type && lhs.name == rhs.name) return true;
-    if (lhs.name == "subrange" && rhs.type == TC_INTEGER) return true;
-    if (rhs.name == "subrange" && lhs.type == TC_INTEGER) return true;
-    return false;
+    return TypeCheck::sameType(lhs, rhs);
 }
 
 bool SemanticAnalyzer::assignmentCompatible(const SemanticType& lhs, const SemanticType& rhs) {
-    if (lhs.type == TC_NOTYPE || rhs.type == TC_NOTYPE) return true;
-    if (sameType(lhs, rhs)) return true;
-    if (lhs.type == TC_REAL && rhs.type == TC_INTEGER) return true;
-    return false;
+    return TypeCheck::assignmentCompatible(lhs, rhs);
+}
+
+SemanticType SemanticAnalyzer::applyBinary(const string& op, const SemanticType& a, const SemanticType& b) {
+    TypeCheck::TypeError err;
+    SemanticType result = TypeCheck::resultBinary(op, a, b, err);
+    switch (err) {
+        case TypeCheck::TypeError::NonNumeric:
+            reportError("operator '" + opSymbol(op) + "' requires numeric operands, got '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::NonInteger:
+            reportError("operator '" + opSymbol(op) + "' requires integer operands, got '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::NonBoolean:
+            reportError("operator '" + opSymbol(op) + "' requires boolean operands, got '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::IncompatibleOperand:
+            reportError("operator '" + opSymbol(op) + "' has incompatible operands '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::None:
+            break;
+    }
+    return result;
 }
 
 bool SemanticAnalyzer::isTokenLabel(const string& label, const string& tokenType, string* value) {
@@ -223,6 +226,12 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
 
     if (isTokenLabel(label, "intcon", &value)) {
         SemanticType type = basicType("integer");
+        try {
+            int v = stoi(value);
+            type.low = type.high = v;
+            type.hasRange = true; // nilai literal -> dipakai utk cek subset range
+        } catch (...) {
+        }
         annotate(node, type);
         return type;
     }
@@ -241,6 +250,8 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
 
     if (isTokenLabel(label, "string", &value)) {
         SemanticType type = basicType("string");
+        type.len = static_cast<int>(value.size());
+        type.hasLen = true; // panjang literal -> dipakai utk aturan same-length
         annotate(node, type);
         return type;
     }
@@ -648,12 +659,17 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
 }
 
 SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
+    // <expression> ::= <simple-expression> [ relop <simple-expression> ]
     SemanticType left = node->children.empty() ? SemanticType{} : visit(node->children[0]);
     if (node->children.size() >= 3) {
+        if (node->children[1]) visit(node->children[1]); // anotasi operator relasional
         SemanticType right = visit(node->children[2]);
-        SemanticType result = basicType("boolean");
-        if (!(sameType(left, right) || (isNumeric(left) && isNumeric(right)))) {
-            reportError("relational expression has incompatible operands");
+
+        TypeCheck::TypeError err;
+        SemanticType result = TypeCheck::resultRelational(left, right, err);
+        if (err == TypeCheck::TypeError::IncompatibleOperand) {
+            reportError("relational expression has incompatible operands '" +
+                        typeName(left) + "' and '" + typeName(right) + "'");
         }
 
         annotate(node, result);
@@ -665,31 +681,61 @@ SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
-    // ambil tipe dari term 1
-    SemanticType result;
-    vector<SemanticType> terms;
+    // <simple-expression> ::= [sign] <term> { (+|-|or) <term> }
+    SemanticType acc;
+    bool haveAcc = false;
+    string pendingOp;
     for (const auto& child : node->children) {
-        if (child->label == "<term>") terms.push_back(visit(child));
-        else visit(child);
+        if (child->label == "<term>") {
+            SemanticType t = visit(child);
+            if (!haveAcc) {
+                acc = t;
+                haveAcc = true;
+            } else {
+                acc = applyBinary(pendingOp, acc, t);
+                pendingOp.clear();
+            }
+        } else {
+            // operator biner muncul di antara term; sign di depan diabaikan
+            if (haveAcc && (child->label == "plus" || child->label == "minus" ||
+                            child->label == "orsy")) {
+                pendingOp = child->label;
+            }
+            visit(child);
+        }
     }
 
-    if (!terms.empty()) result = terms.front();
-    annotate(node, result);
-    return result;
+    annotate(node, acc);
+    return acc;
 }
 
 SemanticType SemanticAnalyzer::visitTerm(const NodePtr& node) {
-    // ambil tipe dari factor 1
-    SemanticType result;
-    vector<SemanticType> factors;
+    // <term> ::= <factor> { (*|/|div|mod|and) <factor> }
+    SemanticType acc;
+    bool haveAcc = false;
+    string pendingOp;
     for (const auto& child : node->children) {
-        if (child->label == "<factor>") factors.push_back(visit(child));
-        else visit(child);
+        if (child->label == "<factor>") {
+            SemanticType f = visit(child);
+            if (!haveAcc) {
+                acc = f;
+                haveAcc = true;
+            } else {
+                acc = applyBinary(pendingOp, acc, f);
+                pendingOp.clear();
+            }
+        } else {
+            if (haveAcc && (child->label == "times" || child->label == "rdiv" ||
+                            child->label == "idiv" || child->label == "imod" ||
+                            child->label == "andsy")) {
+                pendingOp = child->label;
+            }
+            visit(child);
+        }
     }
 
-    if (!factors.empty()) result = factors.front();
-    annotate(node, result);
-    return result;
+    annotate(node, acc);
+    return acc;
 }
 
 SemanticType SemanticAnalyzer::visitFactor(const NodePtr& node) {
@@ -753,14 +799,34 @@ SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
     // range dipakai untuk subrange / array index
     SemanticType result = basicType("integer");
     result.name = "subrange";
+    result.isSubrange = true;
     vector<SemanticType> bounds;
     for (const auto& child : node->children) {
         if (child->label == "<constant>") bounds.push_back(visitConstant(child));
         else visit(child);
     }
 
-    if (bounds.size() == 2 && (bounds[0].type == TC_REAL || bounds[1].type == TC_REAL)) {
-        reportError("range bounds cannot be real");
+    if (bounds.size() == 2) {
+        bool realBound = false;
+        bool orderBad = false;
+        TypeCheck::validateRangeBounds(bounds[0], bounds[1], realBound, orderBad);
+        if (realBound) {
+            reportError("range bounds cannot be real");
+        } else if (orderBad) {
+            reportError("range lower bound exceeds upper bound");
+        }
+
+        // batas basis subrange (best-effort, bila nilai konstan diketahui)
+        if (bounds[0].hasRange && bounds[1].hasRange) {
+            result.low = bounds[0].low;
+            result.high = bounds[1].high;
+            result.hasRange = true;
+        }
+        // tipe basis subrange mengikuti tipe constant (integer/char/boolean)
+        int basis = bounds[0].type;
+        if (basis == TC_INTEGER || basis == TC_CHAR || basis == TC_BOOLEAN) {
+            result.type = basis;
+        }
     }
 
     annotate(node, result);
@@ -768,11 +834,27 @@ SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
-    for (const auto& child : node->children){
-        visit(child);
+    // <enumerated> ::= ( ident { , ident } )
+    // Type enumerated ditentukan oleh ident di dalamnya; semua ident harus
+    // bertipe sama (spec hal. 15).
+    SemanticType common;
+    bool haveCommon = false;
+    bool mismatch = false;
+    for (const auto& child : node->children) {
+        SemanticType t = visit(child); // anotasi + lookup/undeclared utk ident
+        if (child->label.rfind("ident(", 0) == 0 && t.type != TC_NOTYPE) {
+            if (!haveCommon) {
+                common = t;
+                haveCommon = true;
+            } else if (common.type != t.type) {
+                mismatch = true;
+            }
+        }
     }
 
-    SemanticType result = basicType("integer");
+    if (mismatch) reportError("enumerated members must have the same type");
+
+    SemanticType result = haveCommon ? common : basicType("integer");
     result.name = "enumerated";
     annotate(node, result);
     return result;
@@ -792,7 +874,7 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
         }
     }
 
-    if (indexType.type == TC_REAL) reportError("array index type cannot be real");
+    if (!TypeCheck::validArrayIndex(indexType)) reportError("array index type cannot be real");
     SemanticType result = basicType("array");
     result.type = TC_ARRAY;
     result.ref = 0;

@@ -3,17 +3,9 @@
 #include "../std.hpp"
 #include "../syntax/parse_tree.hpp"
 #include "symbol_table.hpp"
+#include "type_check.hpp"
 
-// semantic
-struct SemanticType {
-    int type = TC_NOTYPE;   // hasil inferensi tipe
-    string name;            // nama tipe
-    bool anonymous = false; // tipe anonim
-    int ref = 0;            // ref ke tipe lain
-    int low = 0;            // batas bawah
-    int high = 0;           // batas atas
-    int size = 1;           // ukuran tipe
-};
+// SemanticType didefinisikan di type_check.hpp (modul aturan tipe).
 
 class SemanticAnalyzer {
 public:
@@ -139,6 +131,9 @@ private:
 
     // cek kompatibilitas assignment
     static bool assignmentCompatible(const SemanticType& lhs, const SemanticType& rhs);
+
+    // gabungkan dua operand lewat operator biner + lapor error bila tak cocok
+    SemanticType applyBinary(const string& op, const SemanticType& a, const SemanticType& b);
 
     // cari tipe berdasarkan nama
     SemanticType lookupTypeByName(const string& name) const;
