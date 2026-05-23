@@ -5,7 +5,40 @@ AstDecorator::AstDecorator(const SymbolTable& sym) : symbols(sym) {}
 void AstDecorator::decorate(const AstNodePtr& root) {
     currBlock = 0;
     currLev = 0;
+
+    // kumpulkan btab record (dari tab TC_RECORD) urut deklarasi
+    recordBlocks.clear();
+    recordBlockCursor = 0;
+    recordContext.clear();
+    const auto& tab = symbols.getTab();
+    for (const auto& e : tab) {
+        if (e.type == TC_RECORD && e.ref > 0) {
+            bool dup = false;
+            for (int r : recordBlocks) if (r == e.ref) { dup = true; break; }
+            if (!dup) recordBlocks.push_back(e.ref);
+        }
+    }
+
     visit(root);
+}
+
+int AstDecorator::lookupInBlock(int blockIdx, const string& id) const {
+    const auto& tab = symbols.getTab();
+    const auto& btab = symbols.getBtab();
+    if (blockIdx <= 0 || blockIdx >= (int)btab.size()) return -1;
+    int idx = btab[blockIdx].last;
+    while (idx != 0) {
+        const string& tid = tab[idx].id;
+        if (tid.size() == id.size()) {
+            bool match = true;
+            for (size_t i = 0; i < id.size(); ++i) {
+                if (tolower((unsigned char)tid[i]) != tolower((unsigned char)id[i])) { match = false; break; }
+            }
+            if (match) return idx;
+        }
+        idx = tab[idx].link;
+    }
+    return -1;
 }
 
 string AstDecorator::typeNameFromCode(int code) const {
@@ -40,9 +73,36 @@ void AstDecorator::visit(const AstNodePtr& node) {
 
     AstKind k = node->kind;
 
+    // record type: map ke btab record block, push ke context, traverse fields
+    if (k == AstKind::RecordType) {
+        int recBlock = -1;
+        if (recordBlockCursor < recordBlocks.size()) {
+            recBlock = recordBlocks[recordBlockCursor++];
+        }
+        node->typeName = "record";
+        if (recBlock >= 0) {
+            node->blockIndex = recBlock;
+            recordContext.push_back(recBlock);
+        }
+        for (auto& c : node->children) visit(c);
+        if (recBlock >= 0) recordContext.pop_back();
+        return;
+    }
+
     // lookup nodes
     if (k == AstKind::Var) {
         annotateFromTab(node, node->value);
+    } else if (k == AstKind::VarDecl && !recordContext.empty()) {
+        // field record: lookup dlm btab record (bukan global) utk hindari
+        // collision case-insensitive dgn ident global.
+        int blockIdx = recordContext.back();
+        int idx = lookupInBlock(blockIdx, node->value);
+        if (idx >= 0) {
+            const auto& e = symbols.getTab()[idx];
+            node->tabIndex = idx;
+            node->typeName = typeNameFromCode(e.type);
+            node->lev = e.lev;
+        }
     } else if (k == AstKind::VarDecl || k == AstKind::ConstDecl || k == AstKind::TypeDecl) {
         annotateFromTab(node, node->value);
         // no block/lev propagation
