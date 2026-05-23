@@ -110,7 +110,7 @@ AstNodePtr AstBuilder::buildProgram(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildDeclarationPart(const NodePtr& node) {
-    auto block = makeAst(AstKind::Block);
+    auto block = makeAst(AstKind::Declarations);
     for (auto& c : node->children) {
         AstNodePtr v;
         if (c->label == "<var-declaration>")        v = buildVarDeclaration(c);

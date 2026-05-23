@@ -8,6 +8,7 @@ enum class AstKind {
     ConstDecl,
     TypeDecl,
     Block,
+    Declarations,
     Assign,
     BinOp,
     UnaryOp,
