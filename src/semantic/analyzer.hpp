@@ -74,6 +74,7 @@ private:
     SemanticType visitForStatement(const NodePtr& node);
 
     SemanticType visitRepeatStatement(const NodePtr& node);
+    SemanticType visitCaseStatement(const NodePtr& node);
 
     SemanticType visitProcedureFunctionCall(const NodePtr& node);
     SemanticType visitVariable(const NodePtr& node);

@@ -189,6 +189,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
     if (label == "<while-statement>") return visitWhileStatement(node);
     if (label == "<for-statement>") return visitForStatement(node);
     if (label == "<repeat-statement>") return visitRepeatStatement(node);
+    if (label == "<case-statement>") return visitCaseStatement(node);
     if (label == "<procedure/function-call>") return visitProcedureFunctionCall(node);
     if (label == "<variable>") return visitVariable(node);
     if (label == "<component-variable>") return visitComponentVariable(node, SemanticType{});
@@ -643,6 +644,34 @@ SemanticType SemanticAnalyzer::visitRepeatStatement(const NodePtr& node) {
     return result;
 }
 
+SemanticType SemanticAnalyzer::visitCaseStatement(const NodePtr& node) {
+    SemanticType selectorType;
+    bool selectorSeen = false;
+    for (const auto& child : node->children) {
+        if (child->label == "<expression>") {
+            selectorType = visit(child);
+            selectorSeen = true;
+        } else if (child->label == "<case-block>") {
+            for (const auto& cbChild : child->children) {
+                if (cbChild->label == "<constant>") {
+                    SemanticType labelType = visitConstant(cbChild);
+                    if (selectorSeen && labelType.type != TC_NOTYPE &&
+                        !TypeCheck::compatible(selectorType, labelType)) {
+                        reportError("case label type '" + typeName(labelType) +
+                                    "' is incompatible with selector type '" +
+                                    typeName(selectorType) + "'");
+                    }
+                }
+            }
+        } else {
+            visit(child);
+        }
+    }
+    SemanticType result = basicType("void");
+    annotate(node, result);
+    return result;
+}
+
 SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
     string name;
     vector<SemanticType> args;
@@ -759,7 +788,15 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
     for (const auto& child : node->children) {
         if (child->label == "lbrack") isIndex = true;
         else if (child->label == "period") isField = true;
-        else if (child->label == "<index-list>") visit(child);
+        else if (child->label == "<index-list>") {
+            for (const auto& idxNode : child->children) {
+                SemanticType idxType = visit(idxNode);
+                if (idxType.type == TC_NOTYPE) continue;
+                if (!TypeCheck::isOrdinal(idxType)) {
+                    reportError("array index must be ordinal type, got '" + typeName(idxType) + "'");
+                }
+            }
+        }
         else if (child->label.rfind("ident(", 0) == 0 && isField) fieldIdent = child;
     }
 
@@ -1126,8 +1163,16 @@ SemanticType SemanticAnalyzer::visitParameterGroup(const NodePtr& node) {
     }
 
     for (const auto& name : names) {
-        if (lookupCurrentScope(symbols, name) >= 0) reportError("redeclared parameter '" + name + "'");
-        else symbols.enter(name, (int)ObjClass::VARIABLE, paramType.type, paramType.ref, true, symbols.currentLevel(), 0);
+        if (lookupCurrentScope(symbols, name) >= 0) {
+            reportError("redeclared parameter '" + name + "'");
+        } else {
+            // parameter name must not shadow outer-scope declarations (M3 QnA #16)
+            int outerIdx = symbols.lookup(name);
+            if (outerIdx >= 0 && symbols.getTab()[outerIdx].lev < symbols.currentLevel()) {
+                reportError("parameter '" + name + "' shadows outer declaration");
+            }
+            symbols.enter(name, (int)ObjClass::VARIABLE, paramType.type, paramType.ref, true, symbols.currentLevel(), 0);
+        }
     }
     
     annotate(node, paramType);

@@ -108,6 +108,9 @@ bool compatible(const SemanticType& a, const SemanticType& b) {
     if ((a.name == "enumerated" || b.name == "enumerated") && a.type == b.type)
         return true;
 
+    // numeric types are compatible for comparison
+    if (isNumeric(a) && isNumeric(b)) return true;
+
     return false;
 }
 

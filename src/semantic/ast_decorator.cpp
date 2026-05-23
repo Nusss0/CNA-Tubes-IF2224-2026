@@ -111,8 +111,13 @@ void AstDecorator::visit(const AstNodePtr& node) {
         } else if (op == "/") {
             node->typeName = "real";
         } else if (op == "+" || op == "-" || op == "*") {
-            if (leftT == "real" || rightT == "real") node->typeName = "real";
-            else node->typeName = "integer";
+            if (op == "+" && leftT == "string" && rightT == "string") {
+                node->typeName = "string";
+            } else if (leftT == "real" || rightT == "real") {
+                node->typeName = "real";
+            } else {
+                node->typeName = "integer";
+            }
         }
         return;
     }
