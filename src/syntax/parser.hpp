@@ -8,7 +8,7 @@
 #include "expression_parser.hpp"
 #include "stmt_sbpgr_parser.hpp"
 
-// rich error log, dipake Parser utama (sub-parser cuma punya errorMessage string)
+// error log
 struct ParseError {
     string message;
     int tokenIndex;
@@ -16,14 +16,12 @@ struct ParseError {
     string tokenValue;
 };
 
-// Parser utama: koordinator <program>. Pegang DeclParser/ExprParser/StmtParser
-// sbg member, sync posisi via pos-sync pattern. Helper token diturunkan
-// dari ParserBase, override reportError utk push ke errors[] + cerr.
+// main parser
 class Parser : public ParserBase {
 public:
     explicit Parser(const vector<Token>& toks);
 
-    // entry point: parse <program>
+    // entry
     NodePtr parseProgram();
 
     bool hasError() const { return !errors.empty(); }
@@ -38,13 +36,13 @@ public:
     NodePtr parseStatement();
 
 protected:
-    // override base: push ke errors[] + cetak ke cerr
+    // override error
     void reportError(const string& message) override;
 
 private:
     vector<ParseError> errors;
 
-    // sub-parsers, di-construct sekali di ctor + cross-wiring pointer
+    // sub-parsers
     DeclarationParser declParser;
     ExpressionParser exprParser;
     StatementSubprogramParser stmtParser;

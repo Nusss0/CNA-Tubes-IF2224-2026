@@ -4,7 +4,7 @@
 struct ParseNode {
     string label;
     vector<shared_ptr<ParseNode>> children;
-    //semantic
+    // semantic
     int tab_index = -1;
     int lev = -1;
     int block_index = -1;

@@ -1,0 +1,35 @@
+ProgramNode(name: 'AllDecl')
++-- Declarations
+|   +-- ConstDecl('X')
+|   |   \-- Num(10)
+|   +-- ConstDecl('PI')
+|   |   \-- Num(3.14)
+|   +-- TypeDecl('T')
+|   |   \-- type: 'integer'
+|   +-- TypeDecl('R')
+|   |   \-- RecordType
+|   |       +-- VarDecl('a')
+|   |       |   \-- type: 'integer'
+|   |       \-- VarDecl('b')
+|   |           \-- type: 'real'
+|   +-- TypeDecl('M')
+|   |   \-- EnumType
+|   |       +-- Var('Jan')
+|   |       +-- Var('Feb')
+|   |       \-- Var('Mar')
+|   +-- TypeDecl('A')
+|   |   \-- ArrayType
+|   |       +-- RangeType
+|   |       |   +-- Num(1)
+|   |       |   \-- Num(10)
+|   |       \-- type: 'integer'
+|   +-- VarDecl('a')
+|   |   \-- type: 'T'
+|   +-- VarDecl('b')
+|   |   \-- type: 'R'
+|   +-- VarDecl('c')
+|   |   \-- type: 'M'
+|   \-- VarDecl('d')
+|       \-- type: 'A'
+\-- Block
+    \-- Empty

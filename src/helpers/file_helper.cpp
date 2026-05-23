@@ -4,7 +4,7 @@
 string DFAFileReader(const string fileName){
     ifstream f(fileName);
 
-    //error handling
+    // err
     if(!f.is_open()) {
         cerr << "File not found !!!\n";
         return "";
@@ -61,7 +61,7 @@ vector<Token> LoadTokens(const string& path){
     int checked = 0;
     int tokenLike = 0;
     
-    // cek 8 baris aja
+    // check 8 lines
     while(getline(f, line) && checked < 8){
         if(!line.empty() && line.back() == '\r') line.pop_back();
         if(line.empty()) continue;
@@ -83,7 +83,7 @@ vector<Token> LoadTokens(const string& path){
         return TokenFileReader(path);
     }
 
-    // run lexer and remove comment tokens before parser (raw file)
+    // fallback: raw file
     string raw = DFAFileReader(path);
     tokens = Tokenizing(raw);
 
@@ -123,9 +123,9 @@ bool IsFileExist(const string path){
     ifstream f(path);
     char op;
     bool restart = true;
-    if(f.good()){ //jika file name ditemukan
+    if(f.good()){ // file exists
         cout << "File Exist !!!\n";
-        while (restart){ //selama tidak return, akan terjebak di loop ini
+        while (restart){ // confirm override
             cout << "Do you want to override it ? [Y/n]\n";
             cin >> op;
             if(op =='Y'||op=='y'){
@@ -139,6 +139,6 @@ bool IsFileExist(const string path){
             }
         }
     }  
-    //jika file tidak ditemukan
+    // file not found
     return false; //langsung return false
 }

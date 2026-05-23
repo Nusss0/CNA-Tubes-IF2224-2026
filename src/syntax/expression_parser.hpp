@@ -4,8 +4,7 @@
 #include "parse_tree.hpp"
 #include "parser_base.hpp"
 
-// parser khusus expression: <expression>, <simple-expression>, <term>, <factor>.
-// helper token (peek/check/advance/match/consume) diturunkan dari ParserBase.
+// expr parser
 class ExpressionParser : public ParserBase {
 public:
     ExpressionParser() = default;
@@ -17,8 +16,7 @@ public:
     NodePtr parseFactor();
 
 private:
-    // factor bisa ngandung ident yg sebenernya call/variabel,
-    // jadi parse logic-nya di-mirror sebagian dari StmtParser
+    // factor: call/var mirror
     NodePtr parseVariable();
     NodePtr parseProcedureFunctionCall();
     NodePtr parseIndexList();

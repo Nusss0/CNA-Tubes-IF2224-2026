@@ -1,13 +1,14 @@
 #pragma once
 #include "../std.hpp"
 
-// kind tag utk dispatch visitor (switch lbh murah drpd dynamic_cast)
+// ast kind
 enum class AstKind {
     Program,
     VarDecl,
     ConstDecl,
     TypeDecl,
     Block,
+    Declarations,
     Assign,
     BinOp,
     UnaryOp,
@@ -43,10 +44,12 @@ using AstNodePtr = shared_ptr<AstNode>;
 struct AstNode {
     AstKind kind;
 
-    //semantic 
-    string typeName;   // hasil inferensi tipe 
+    // semantic
+    string typeName;   // hasil inferensi tipe
     int tabIndex = -1; // referensi ke entry symbol table
     int lev = -1;      // lexical level
+    int blockIndex = -1; // referensi ke entry btab (utk Compound block)
+    bool predefined = false; // true utk predefined identifier (writeln/readln/dll)
 
     // payload string
     string value;
@@ -60,10 +63,10 @@ struct AstNode {
     AstNode(AstKind k, const string& val) : kind(k), value(val) {}
 };
 
-// factory + helper
+// factory
 AstNodePtr makeAst(AstKind kind);
 AstNodePtr makeAst(AstKind kind, const string& value);
 void addAstChild(const AstNodePtr& parent, const AstNodePtr& child);
 
-// nama human-readable utk kind
+// kind name
 string astKindName(AstKind kind);

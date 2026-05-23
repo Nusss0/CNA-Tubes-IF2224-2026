@@ -3,9 +3,7 @@
 #include <iomanip>
 #include <stdexcept>
 
-// == Helper == //
-
-// helper untuk mengambil nama kelas objek
+// helpers
 static const char* objClassName(int obj) {
     switch (static_cast<ObjClass>(obj)) {
         case ObjClass::UNDEFINED: return "undef";
@@ -19,7 +17,7 @@ static const char* objClassName(int obj) {
     }
 }
 
-// helper untuk melakukan print strip
+
 static void printHorizontalRule(ostream& out, const vector<int>& widths) {
     for (size_t i = 0; i < widths.size(); ++i) {
         out << string(widths[i], '-');
@@ -28,9 +26,7 @@ static void printHorizontalRule(ostream& out, const vector<int>& widths) {
     out << '\n';
 }
 
-// == Implementasi Method == //
-
-// konstruktor kelas symtab
+// ctor
 SymbolTable::SymbolTable() {
     tab.reserve(128);
     btab.reserve(32);
@@ -40,15 +36,19 @@ SymbolTable::SymbolTable() {
 
     initReservedWords();
     initPredefined();
+    predefinedEnd = static_cast<int>(tab.size());
 
     btab.push_back({0, 0, 0, 0});
     btab[0].last = static_cast<int>(tab.size()) - 1;
+
+    // dummy atab[0]
+    atab.push_back({0, 0, 0, 0, 0, 0, 0});
 
     display.push_back(0);
     level = 0;
 }
 
-// implementasi fungsi initReservedWords
+// init reserved
 void SymbolTable::initReservedWords() {
     struct RawReserved {
         const char* name;
@@ -120,42 +120,42 @@ void SymbolTable::initReservedWords() {
 }
 
 
-// implementasi fungsi untuk initPredefined
+// init predefined
 void SymbolTable::initPredefined() {
-    /* True */
+    /* true */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"True", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 1});
+        tab.push_back({"true", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 1});
     }
 
-    /* False */
+    /* false */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"False", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 0});
+        tab.push_back({"false", prev, (int)ObjClass::CONSTANT, TC_BOOLEAN, 0, true, 0, 0});
     }
 
-    /* Readln */
+    /* readln */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"Readln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
+        tab.push_back({"readln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
     }
 
-    /* Writeln */
+    /* writeln */
     {
         int prev = static_cast<int>(tab.size()) - 1;
-        tab.push_back({"Writeln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
+        tab.push_back({"writeln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
     }
 }
 
-// implementasi method addTabEntry untuk menambahkan entry table
+// add entry
 int SymbolTable::addTabEntry(const TabEntry& entry) {
     tab.push_back(entry);
     return static_cast<int>(tab.size()) - 1;
 }
 
-// menambhakan sebuah identifier baru dengan bantuan implementasi method enter
+// enter
 int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, int lev, int adr) {
-    int blockIdx = display[level];
+    int blockIdx = currentBlock();
     int prevLast = btab[blockIdx].last;
 
     TabEntry entry;
@@ -169,39 +169,90 @@ int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, i
     entry.adr = adr;
 
     int idx = addTabEntry(entry);
-    btab[blockIdx].last = idx;          
+    btab[blockIdx].last = idx;
+    // track var size
+    if (obj == (int)ObjClass::VARIABLE) {
+        btab[blockIdx].vsze += 1;
+    }
     return idx;
 }
 
-// implementasi method lookup untuk mencari first match dari sebuah tab entry 
+// case-insensitive
+static bool sameId(const string& a, const string& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (tolower(static_cast<unsigned char>(a[i])) != tolower(static_cast<unsigned char>(b[i]))) return false;
+    }
+    return true;
+}
+
+// link ref
+void SymbolTable::setRef(int tabIdx, int ref) {
+    if (tabIdx > 0 && tabIdx < (int)tab.size()) tab[tabIdx].ref = ref;
+}
+
+// mark params
+void SymbolTable::markParamBoundary() {
+    int blockIdx = currentBlock();
+    btab[blockIdx].lpar = btab[blockIdx].last;
+    btab[blockIdx].psze = btab[blockIdx].vsze;
+}
+
+// lookup
 int SymbolTable::lookup(const string& id) const {
     for (int lev = level; lev >= 0; --lev) {
         int blockIdx = display[lev];
         int idx = btab[blockIdx].last;
 
         while (idx != 0) {
-            if (tab[idx].id == id) return idx;
+            if (sameId(tab[idx].id, id)) return idx;
             idx = tab[idx].link;
         }
     }
     return -1;
 }
 
-// implementasi method pushBlock untuk memasukkan sebuah lexical scope baru
+// enter array
+int SymbolTable::enterArray(int xtyp, int etyp, int eref, int low, int high, int elsz, int size) {
+    AtabEntry entry;
+    entry.xtyp = xtyp;
+    entry.etyp = etyp;
+    entry.eref = eref;
+    entry.low  = low;
+    entry.high = high;
+    entry.elsz = elsz;
+    entry.size = size;
+    atab.push_back(entry);
+    return static_cast<int>(atab.size()) - 1;
+}
+
+// push block
 void SymbolTable::pushBlock() {
     btab.push_back({0, 0, 0, 0});
     ++level;
     display.push_back(static_cast<int>(btab.size()) - 1);
 }
 
-// implementasi method popBlock untuk dari display 
+// push record block (tanpa naikkan level — record bukan scope leksikal)
+int SymbolTable::pushRecordBlock() {
+    btab.push_back({0, 0, 0, 0});
+    int newIdx = static_cast<int>(btab.size()) - 1;
+    blockOverride.push_back(newIdx); // arahkan enter() ke block ini
+    return newIdx;
+}
+
+void SymbolTable::popRecordBlock() {
+    if (!blockOverride.empty()) blockOverride.pop_back();
+}
+
+// pop block 
 void SymbolTable::popBlock() {
     if (level <= 0) return;         
     --level;
     display.pop_back();
 }
 
-// implementasi method dumpTab 
+// dump tab 
 void SymbolTable::dumpTab(ostream& out) const {
     out << "\ntab:\n";
 
@@ -219,7 +270,6 @@ void SymbolTable::dumpTab(ostream& out) const {
             << setw(widths[8]) << link << '\n';
     };
 
-    /* header */
     out << setw(widths[0]) << "idx" << ' '
         << setw(widths[1]) << "id" << ' '
         << setw(widths[2]) << "obj" << ' '
@@ -241,7 +291,7 @@ void SymbolTable::dumpTab(ostream& out) const {
     }
 }
 
-// implementasi method dumpBtab
+// dump btab
 void SymbolTable::dumpBtab(ostream& out) const {
     out << "\nbtab:\n";
 
@@ -264,11 +314,12 @@ void SymbolTable::dumpBtab(ostream& out) const {
     }
 }
 
-// implementasi method dumpAtab
+// dump atab
 void SymbolTable::dumpAtab(ostream& out) const {
     out << "\natab:\n";
 
-    if (atab.empty()) {
+    // dummy atab[0]
+    if (atab.size() <= 1) {
         out << "(empty)\n";
         return;
     }
@@ -285,7 +336,8 @@ void SymbolTable::dumpAtab(ostream& out) const {
 
     out << string(50, '-') << '\n';
 
-    for (size_t i = 0; i < atab.size(); ++i) {
+    // skip dummy
+    for (size_t i = 1; i < atab.size(); ++i) {
         out << right
             << setw(widths[0]) << i << ' '
             << setw(widths[1]) << atab[i].xtyp << ' '
@@ -298,7 +350,7 @@ void SymbolTable::dumpAtab(ostream& out) const {
     }
 }
 
-// impelementasi method dumpAll 
+// dump all 
 void SymbolTable::dumpAll(ostream& out) const {
     dumpTab(out);
     dumpBtab(out);

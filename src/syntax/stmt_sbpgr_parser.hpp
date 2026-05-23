@@ -7,19 +7,17 @@
 class DeclarationParser;
 class ExpressionParser;
 
-// parser utk statement & subprogram declaration.
-// helper token diturunkan dari ParserBase. delegasi ke DeclParser/ExprParser
-// lewat pointer non-owning yg di-inject Parser utama.
+// stmt/subprogram parser
 class StatementSubprogramParser : public ParserBase {
 public:
     StatementSubprogramParser() = default;
     explicit StatementSubprogramParser(const vector<Token>& tokens) : ParserBase(tokens) {}
 
-    // peer parser injection (dipakai utk delegasi internal)
+    // peer parsers
     void setDeclParser(DeclarationParser* p) { declParser_ = p; }
     void setExprParser(ExpressionParser* p) { exprParser_ = p; }
 
-    // parser untuk statements
+    // statements
     NodePtr parseStatement();
     NodePtr parseAssignmentStatement();
     NodePtr parseIfStatement();
@@ -29,13 +27,13 @@ public:
     NodePtr parseForStatement();
     NodePtr parseProcedureFunctionCall();
 
-    // parser untuk parameter
+    // params
     NodePtr parseParameterList();
     NodePtr parseVariable();
     NodePtr parseComponentVariable();
     NodePtr parseIndexList();
 
-    // parser untuk deklarasi subprogram
+    // subprograms
     NodePtr parseSubprogramDeclaration();
     NodePtr parseProcedureDeclaration();
     NodePtr parseFunctionDeclaration();
@@ -43,7 +41,7 @@ public:
     NodePtr parseFormalParameterList();
     NodePtr parseParameterGroup();
 
-    // method yg di-delegasi ke peer parser (expression/declaration)
+    // delegated
     NodePtr parseCaseBlock();
     NodePtr parseExpression();
     NodePtr parseStatementList();
@@ -54,7 +52,7 @@ public:
     NodePtr parseArrayType();
 
 private:
-    // peer parsers (non-owning, di-set dari Parser utama)
+    // peer ptrs
     DeclarationParser* declParser_ = nullptr;
     ExpressionParser* exprParser_ = nullptr;
 };

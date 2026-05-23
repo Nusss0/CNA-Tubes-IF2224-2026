@@ -1,0 +1,11 @@
+program Expr;
+
+var
+  a, b, c, d: integer;
+
+begin
+  a := 1 + 2 * 3 - 4 div 5 + 6 mod 7;
+  b := a * (b + c);
+  c := not a and b or c;
+  d := (a = b) and (c <> d);
+end.

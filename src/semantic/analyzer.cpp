@@ -2,14 +2,6 @@
 
 // helper
 namespace {
-string toLowerCopy(string text) {
-    for (char& c : text){
-        c = static_cast<char>(tolower(static_cast<unsigned char>(c)));
-    }
-
-    return text;
-}
-
 bool isIdentLabel(const string& label, string& value) {
     if (label.rfind("ident(", 0) != 0) return false;
     auto begin = label.find('(');
@@ -19,14 +11,34 @@ bool isIdentLabel(const string& label, string& value) {
     return true;
 }
 
+// op symbol
+string opSymbol(const string& label) {
+    if (label == "plus") return "+";
+    if (label == "minus") return "-";
+    if (label == "times") return "*";
+    if (label == "rdiv") return "/";
+    if (label == "idiv") return "div";
+    if (label == "imod") return "mod";
+    if (label == "andsy") return "and";
+    if (label == "orsy") return "or";
+    return label;
+}
+
 int lookupCurrentScope(SymbolTable& symbols, const string& id) {
-    const auto& display = symbols.getDisplay();
     const auto& tab = symbols.getTab();
     const auto& btab = symbols.getBtab();
-    int blockIdx = display[symbols.currentLevel()];
+    int blockIdx = symbols.currentBlock();
     int idx = btab[blockIdx].last;
+    // case-insensitive lookup
+    auto eq = [](const string& a, const string& b) {
+        if (a.size() != b.size()) return false;
+        for (size_t i = 0; i < a.size(); ++i) {
+            if (tolower(static_cast<unsigned char>(a[i])) != tolower(static_cast<unsigned char>(b[i]))) return false;
+        }
+        return true;
+    };
     while (idx != 0) {
-        if (tab[idx].id == id) return idx;
+        if (eq(tab[idx].id, id)) return idx;
         idx = tab[idx].link;
     }
     return -1;
@@ -35,60 +47,58 @@ int lookupCurrentScope(SymbolTable& symbols, const string& id) {
 }
 
 SemanticAnalyzer::SemanticAnalyzer() = default;
-
 SemanticType SemanticAnalyzer::basicType(const string& name) {
-    SemanticType t;
-    string lowered = toLowerCopy(name);
-    if (lowered == "integer") t.type = TC_INTEGER;
-    else if (lowered == "real") t.type = TC_REAL;
-    else if (lowered == "char") t.type = TC_CHAR;
-    else if (lowered == "boolean") t.type = TC_BOOLEAN;
-    else if (lowered == "string") t.type = TC_STRING;
-    else if (lowered == "void") t.type = TC_NOTYPE;
-    else t.type = TC_NOTYPE;
-    t.name = lowered;
-    return t;
+    return TypeCheck::makeBasic(name);
 }
 
 string SemanticAnalyzer::TypeName(int type) {
-    switch (type) {
-        case TC_INTEGER: return "integer";
-        case TC_REAL: return "real";
-        case TC_BOOLEAN: return "boolean";
-        case TC_CHAR: return "char";
-        case TC_STRING: return "string";
-        case TC_ARRAY: return "array";
-        case TC_RECORD: return "record";
-        default: return "unknown";
-    }
+    return TypeCheck::typeCodeName(type);
 }
 
 string SemanticAnalyzer::typeName(const SemanticType& type) {
-    if (!type.name.empty()) return type.name;
-    return TypeName(type.type);
+    return TypeCheck::describe(type);
 }
 
 bool SemanticAnalyzer::isNumeric(const SemanticType& type) {
-    return type.type == TC_INTEGER || type.type == TC_REAL || type.name == "subrange";
+    return TypeCheck::isNumeric(type);
 }
 
 bool SemanticAnalyzer::isBoolean(const SemanticType& type) {
-    return type.type == TC_BOOLEAN;
+    return TypeCheck::isBoolean(type);
 }
 
 bool SemanticAnalyzer::sameType(const SemanticType& lhs, const SemanticType& rhs) {
-    if (lhs.type == TC_NOTYPE || rhs.type == TC_NOTYPE) return false;
-    if (lhs.type == rhs.type && lhs.name == rhs.name) return true;
-    if (lhs.name == "subrange" && rhs.type == TC_INTEGER) return true;
-    if (rhs.name == "subrange" && lhs.type == TC_INTEGER) return true;
-    return false;
+    return TypeCheck::sameType(lhs, rhs);
 }
 
 bool SemanticAnalyzer::assignmentCompatible(const SemanticType& lhs, const SemanticType& rhs) {
-    if (lhs.type == TC_NOTYPE || rhs.type == TC_NOTYPE) return true;
-    if (sameType(lhs, rhs)) return true;
-    if (lhs.type == TC_REAL && rhs.type == TC_INTEGER) return true;
-    return false;
+    return TypeCheck::assignmentCompatible(lhs, rhs);
+}
+
+SemanticType SemanticAnalyzer::applyBinary(const string& op, const SemanticType& a, const SemanticType& b) {
+    TypeCheck::TypeError err;
+    SemanticType result = TypeCheck::resultBinary(op, a, b, err);
+    switch (err) {
+        case TypeCheck::TypeError::NonNumeric:
+            reportError("operator '" + opSymbol(op) + "' requires numeric operands, got '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::NonInteger:
+            reportError("operator '" + opSymbol(op) + "' requires integer operands, got '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::NonBoolean:
+            reportError("operator '" + opSymbol(op) + "' requires boolean operands, got '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::IncompatibleOperand:
+            reportError("operator '" + opSymbol(op) + "' has incompatible operands '" +
+                        typeName(a) + "' and '" + typeName(b) + "'");
+            break;
+        case TypeCheck::TypeError::None:
+            break;
+    }
+    return result;
 }
 
 bool SemanticAnalyzer::isTokenLabel(const string& label, const string& tokenType, string* value) {
@@ -122,8 +132,10 @@ SemanticType SemanticAnalyzer::lookupTypeByName(const string& name) const {
 
     int idx = symbols.lookup(name);
     if (idx >= 0) {
-        type.type = symbols.getTab()[idx].type;
-        type.name = symbols.getTab()[idx].id;
+        const auto& e = symbols.getTab()[idx];
+        type.type = e.type;
+        type.name = e.id;
+        type.ref  = e.ref; // propagate ref
         return type;
     }
 
@@ -138,7 +150,7 @@ void SemanticAnalyzer::reportError(const string& message) {
 
 void SemanticAnalyzer::annotate(const NodePtr& node, const SemanticType& type, int tabIndex) {
     if (!node) return;
-    // simpan hasil analisis ke node parse tree
+    // annotate node
     node->sem_type = typeName(type);
     node->tab_index = tabIndex;
     node->lev = symbols.currentLevel();
@@ -146,7 +158,7 @@ void SemanticAnalyzer::annotate(const NodePtr& node, const SemanticType& type, i
 }
 
 void SemanticAnalyzer::analyze(const NodePtr& root) {
-    // entry point semantic analysis
+    // analyze
     errors.clear();
     if (!root) {
         reportError("semantic analysis received empty parse tree");
@@ -175,6 +187,8 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
     if (label == "<if-statement>") return visitIfStatement(node);
     if (label == "<while-statement>") return visitWhileStatement(node);
     if (label == "<for-statement>") return visitForStatement(node);
+    if (label == "<repeat-statement>") return visitRepeatStatement(node);
+    if (label == "<case-statement>") return visitCaseStatement(node);
     if (label == "<procedure/function-call>") return visitProcedureFunctionCall(node);
     if (label == "<variable>") return visitVariable(node);
     if (label == "<component-variable>") return visitComponentVariable(node, SemanticType{});
@@ -210,8 +224,10 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
         int index = symbols.lookup(value);
         SemanticType type;
         if (index >= 0) {
-            type.type = symbols.getTab()[index].type;
-            type.name.clear(); // gunakan kode tipe, jangan nama identifier
+            const auto& e = symbols.getTab()[index];
+            type.type = e.type;
+            type.ref = e.ref;
+            type.name.clear(); // use type code
             annotate(node, type, index);
         } else {
             type.name = value;
@@ -223,6 +239,12 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
 
     if (isTokenLabel(label, "intcon", &value)) {
         SemanticType type = basicType("integer");
+        try {
+            int v = stoi(value);
+            type.low = type.high = v;
+            type.hasRange = true; // literal value
+        } catch (...) {
+        }
         annotate(node, type);
         return type;
     }
@@ -241,6 +263,8 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
 
     if (isTokenLabel(label, "string", &value)) {
         SemanticType type = basicType("string");
+        type.len = static_cast<int>(value.size());
+        type.hasLen = true; // string length
         annotate(node, type);
         return type;
     }
@@ -252,7 +276,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitProgram(const NodePtr& node) {
-    // proses node program utama
+    // visit program
     for (const auto& child : node->children){
         visit(child);
     }
@@ -262,7 +286,7 @@ SemanticType SemanticAnalyzer::visitProgram(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitProgramHeader(const NodePtr& node) {
-    // daftar nama program dan cek duplicate
+    // program header
     string programName;
     for (const auto& child : node->children) {
         if (isIdentLabel(child->label, programName)) break;
@@ -286,7 +310,7 @@ SemanticType SemanticAnalyzer::visitProgramHeader(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitDeclarationPart(const NodePtr& node) {
-    // read all declaration sebelum blok program
+    // declarations
     for (const auto& child : node->children){
         visit(child);
     }
@@ -296,7 +320,7 @@ SemanticType SemanticAnalyzer::visitDeclarationPart(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitConstDeclaration(const NodePtr& node) {
-    // masukkan konstanta ke symbol table
+    // const decl
     for (const auto& child : node->children) {
         if (child->label == "<const-item>") {
             string name;
@@ -317,7 +341,7 @@ SemanticType SemanticAnalyzer::visitConstDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitTypeDeclaration(const NodePtr& node) {
-    // masukkan tipe baru ke symbol table
+    // type decl
     for (const auto& child : node->children) {
         if (child->label == "<type-item>") {
             string name;
@@ -338,7 +362,7 @@ SemanticType SemanticAnalyzer::visitTypeDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
-    // masukkan variabel ke symbol table
+    // var decl
     for (const auto& child : node->children) {
         if (child->label == "<var-item>") {
             vector<string> names;
@@ -355,6 +379,7 @@ SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
                 }
             }
 
+            // store ref
             for (const auto& name : names) {
                 if (lookupCurrentScope(symbols, name) >= 0) reportError("redeclared variable '" + name + "'");
                 else symbols.enter(name, (int)ObjClass::VARIABLE, declared.type, declared.ref, true, symbols.currentLevel(), 0);
@@ -366,7 +391,7 @@ SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitSubprogramDeclaration(const NodePtr& node) {
-    // proses semua subprogram yang ditemukan
+    // subprograms
     for (const auto& child : node->children){
         visit(child);
     }
@@ -376,7 +401,7 @@ SemanticType SemanticAnalyzer::visitSubprogramDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
-    // analisis procedure & scope parameternya
+    // proc decl
     string name;
     NodePtr formalParams;
     NodePtr blockNode;
@@ -387,16 +412,24 @@ SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
     }
 
     SemanticType procType = basicType("void");
+    int procIdx = -1;
     if (!name.empty() && lookupCurrentScope(symbols, name) >= 0){
         reportError("redeclared procedure '" + name + "'");
     } else if (!name.empty()){
-        symbols.enter(name, (int)ObjClass::PROCEDURE, procType.type, 0, true, symbols.currentLevel(), 0);
+        procIdx = symbols.enter(name, (int)ObjClass::PROCEDURE, procType.type, 0, true, symbols.currentLevel(), 0);
     }
 
     symbols.pushBlock();
+    int procBlock = symbols.currentBlock();
+    // link proc block
+    if (procIdx >= 0) {
+        symbols.setRef(procIdx, procBlock);
+    }
     if (formalParams){
         visitFormalParameterList(formalParams);
     }
+    // mark params
+    symbols.markParamBoundary();
 
     if (blockNode){
         visitBlock(blockNode, false);
@@ -409,15 +442,20 @@ SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
-    // analisis function & tipe baliknya
+    // func decl
     string name;
     string returnTypeName;
     NodePtr formalParams;
     NodePtr blockNode;
     bool afterColon = false;
     for (const auto& child : node->children) {
-        if (isIdentLabel(child->label, name)) {
-            if (afterColon && returnTypeName.empty()) returnTypeName = name;
+        string identVal;
+        if (isIdentLabel(child->label, identVal)) {
+            if (afterColon) {
+                if (returnTypeName.empty()) returnTypeName = identVal;
+            } else if (name.empty()) {
+                name = identVal;
+            }
             continue;
         }
 
@@ -431,16 +469,22 @@ SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
     }
 
     SemanticType returnType = returnTypeName.empty() ? basicType("void") : lookupTypeByName(returnTypeName);
+    int funcIdx = -1;
     if (!name.empty() && lookupCurrentScope(symbols, name) >= 0){
         reportError("redeclared function '" + name + "'");
     } else if (!name.empty()){
-        symbols.enter(name, (int)ObjClass::FUNCTION, returnType.type, returnType.ref, true, symbols.currentLevel(), 0);
+        funcIdx = symbols.enter(name, (int)ObjClass::FUNCTION, returnType.type, 0, true, symbols.currentLevel(), 0);
     }
 
     symbols.pushBlock();
+    int funcBlock = symbols.currentBlock();
+    if (funcIdx >= 0) {
+        symbols.setRef(funcIdx, funcBlock);
+    }
     if (formalParams){
         visitFormalParameterList(formalParams);
     }
+    symbols.markParamBoundary();
 
     if (blockNode){
         visitBlock(blockNode, false);
@@ -453,7 +497,7 @@ SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitBlock(const NodePtr& node, bool pushScope) {
-    // masuk/keluar scope sesuai konteks blok
+    // block scope
     if (pushScope) symbols.pushBlock();
     for (const auto& child : node->children){
         visit(child);
@@ -465,7 +509,7 @@ SemanticType SemanticAnalyzer::visitBlock(const NodePtr& node, bool pushScope) {
 }
 
 SemanticType SemanticAnalyzer::visitCompoundStatement(const NodePtr& node) {
-    // anggap new block
+    // new block
     return visitBlock(node, true);
 }
 
@@ -477,12 +521,34 @@ SemanticType SemanticAnalyzer::visitStatementList(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitAssignmentStatement(const NodePtr& node) {
-    // cek lhs & rhs
+    // check assign
     SemanticType lhs;
     SemanticType rhs;
+    NodePtr lhsNode = nullptr;
     for (const auto& child : node->children) {
-        if (child->label == "<variable>" || (child->label.rfind("ident(", 0) == 0 && lhs.type == TC_NOTYPE)) lhs = visit(child);
+        if (child->label == "<variable>" || (child->label.rfind("ident(", 0) == 0 && lhs.type == TC_NOTYPE)) {
+            lhs = visit(child);
+            lhsNode = child;
+        }
         if (child->label == "<expression>") rhs = visit(child);
+    }
+
+    // cannot assign to constant
+    if (lhsNode) {
+        int tabIdx = lhsNode->tab_index;
+        if (tabIdx >= 0 && symbols.getTab()[tabIdx].obj == (int)ObjClass::CONSTANT) {
+            string name = extractTokenValue(lhsNode->label);
+            if (name.empty()) {
+                // try first ident child for <variable>
+                for (const auto& c : lhsNode->children) {
+                    if (c->label.rfind("ident(", 0) == 0) {
+                        name = extractTokenValue(c->label);
+                        break;
+                    }
+                }
+            }
+            reportError("cannot assign to constant '" + name + "'");
+        }
     }
 
     if (!assignmentCompatible(lhs, rhs)) {
@@ -533,17 +599,15 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
     SemanticType endType;
     bool sawBecomes = false;
     bool sawDirection = false;
-    for (const auto& child : node->children) {
-        if (isIdentLabel(child->label, loopVar) && !sawBecomes) continue;
-        if (child->label == "becomes") {
-            sawBecomes = true;
-            continue;
-        }
+    NodePtr loopVarNode = nullptr;
 
-        if (child->label == "tosy" || child->label == "downtosy") {
-            sawDirection = true;
+    for (const auto& child : node->children) {
+        if (isIdentLabel(child->label, loopVar) && !sawBecomes) {
+            loopVarNode = child;
             continue;
         }
+        if (child->label == "becomes") { sawBecomes = true; continue; }
+        if (child->label == "tosy" || child->label == "downtosy") { sawDirection = true; continue; }
 
         if (child->label == "<expression>") {
             if (!sawBecomes) startType = visit(child);
@@ -553,21 +617,130 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
             visit(child);
         }
     }
+
+    // loop var
     if (!loopVar.empty()) {
         int idx = symbols.lookup(loopVar);
-        if (idx < 0){
+        if (idx < 0) {
             reportError("undeclared loop variable '" + loopVar + "'");
+            // check bounds
+            if (!TypeCheck::isOrdinal(startType) && startType.type != TC_NOTYPE)
+                reportError("for start expression must be ordinal");
+            if (!TypeCheck::isOrdinal(endType) && endType.type != TC_NOTYPE)
+                reportError("for end expression must be ordinal");
+        } else {
+            // constant cannot be used as loop variable
+            if (symbols.getTab()[idx].obj == (int)ObjClass::CONSTANT)
+                reportError("cannot assign to constant '" + loopVar + "' (used as for-loop variable)");
+
+            SemanticType varType;
+            varType.type = symbols.getTab()[idx].type;
+            if (loopVarNode) annotate(loopVarNode, varType, idx);
+
+            // ordinal check
+            if (!TypeCheck::isOrdinal(varType) && varType.type != TC_NOTYPE)
+                reportError("for loop variable '" + loopVar + "' must be ordinal type");
+
+            // compat check
+            if (startType.type != TC_NOTYPE && !TypeCheck::assignmentCompatible(varType, startType))
+                reportError("for start value is not assignment-compatible with loop variable '" + loopVar + "'");
+            if (endType.type != TC_NOTYPE && !TypeCheck::assignmentCompatible(varType, endType))
+                reportError("for end value is not assignment-compatible with loop variable '" + loopVar + "'");
         }
     }
 
-    if (!isNumeric(startType) && startType.type != TC_NOTYPE){
-        reportError("for start expression must be numeric");
-    }
+    SemanticType result = basicType("void");
+    annotate(node, result);
+    return result;
+}
 
-    if (!isNumeric(endType) && endType.type != TC_NOTYPE){
-        reportError("for end expression must be numeric");
+SemanticType SemanticAnalyzer::visitRepeatStatement(const NodePtr& node) {
+    // check until
+    for (const auto& child : node->children) {
+        if (child->label == "<expression>") {
+            SemanticType cond = visit(child);
+            if (!isBoolean(cond) && cond.type != TC_NOTYPE) {
+                reportError("repeat-until condition must be boolean");
+            }
+        } else {
+            visit(child);
+        }
     }
+    SemanticType result = basicType("void");
+    annotate(node, result);
+    return result;
+}
 
+SemanticType SemanticAnalyzer::visitCaseStatement(const NodePtr& node) {
+    SemanticType selectorType;
+    bool selectorSeen = false;
+    vector<pair<int, string>> seenLabels; // (type_code, raw_value)
+
+    // helper to recursively collect constants from nested case-blocks
+    function<void(const NodePtr&)> collectConstants = [&](const NodePtr& block) {
+        for (const auto& cbChild : block->children) {
+            if (cbChild->label == "<constant>") {
+                SemanticType labelType = visitConstant(cbChild);
+                // extract raw label value for duplicate detection
+                string rawVal;
+                int rawType = TC_NOTYPE;
+                for (const auto& cc : cbChild->children) {
+                    if (cc->label.rfind("intcon(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_INTEGER;
+                        break;
+                    } else if (cc->label.rfind("charcon(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_CHAR;
+                        break;
+                    } else if (cc->label.rfind("ident(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = labelType.type;
+                        break;
+                    } else if (cc->label.rfind("string(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_STRING;
+                        break;
+                    } else if (cc->label.rfind("realcon(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_REAL;
+                        break;
+                    }
+                }
+                if (selectorSeen && labelType.type != TC_NOTYPE &&
+                    !TypeCheck::compatible(selectorType, labelType)) {
+                    reportError("case label type '" + typeName(labelType) +
+                                "' is incompatible with selector type '" +
+                                typeName(selectorType) + "'");
+                }
+                // duplicate check
+                if (rawType != TC_NOTYPE) {
+                    for (const auto& seen : seenLabels) {
+                        if (seen.first == rawType && seen.second == rawVal) {
+                            reportError("duplicate case label '" + rawVal + "'");
+                            break;
+                        }
+                    }
+                    seenLabels.push_back({rawType, rawVal});
+                }
+            } else if (cbChild->label == "<case-block>") {
+                collectConstants(cbChild);
+            } else {
+                visit(cbChild);
+            }
+        }
+    };
+
+    for (const auto& child : node->children) {
+        if (child->label == "<expression>") {
+            selectorType = visit(child);
+            selectorSeen = true;
+        } else if (child->label == "<case-block>") {
+            collectConstants(child);
+        } else {
+            visit(child);
+        }
+    }
     SemanticType result = basicType("void");
     annotate(node, result);
     return result;
@@ -578,8 +751,17 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
     vector<SemanticType> args;
     for (const auto& child : node->children) {
         if (isIdentLabel(child->label, name)) continue;
-        if (child->label == "<expression>") args.push_back(visit(child));
-        else visit(child);
+        if (child->label == "<expression>") {
+            args.push_back(visit(child));
+        } else if (child->label == "<parameter-list>") {
+            // flatten args
+            for (const auto& pc : child->children) {
+                if (pc->label == "<expression>") args.push_back(visit(pc));
+                else visit(pc);
+            }
+        } else {
+            visit(child);
+        }
     }
 
     int idx = name.empty() ? -1 : symbols.lookup(name);
@@ -587,8 +769,55 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
     SemanticType result = basicType("void");
 
     if (idx >= 0) {
-        result.type = symbols.getTab()[idx].type;
-        result.name.clear(); // tampilkan tipe balik, bukan nama fungsi/prosedur
+        const auto& entry = symbols.getTab()[idx];
+        // must be a callable entity
+        bool isCallable = (entry.obj == (int)ObjClass::PROCEDURE ||
+                           entry.obj == (int)ObjClass::FUNCTION);
+        bool isPredef = idx < symbols.predefinedCutoff();
+        if (!isCallable && !isPredef) {
+            reportError("'" + name + "' is not a procedure or function");
+        }
+        result.type = entry.type;
+        result.name.clear();
+
+        if (!isPredef && isCallable && entry.ref > 0) {
+            // get params
+            const auto& btab = symbols.getBtab();
+            const auto& tab = symbols.getTab();
+            int paramBlock = entry.ref;
+            int lastParam = btab[paramBlock].lpar;
+            // walk params
+            vector<int> formalIdxs;
+            int cur = lastParam;
+            while (cur != 0) {
+                formalIdxs.push_back(cur);
+                cur = tab[cur].link;
+            }
+            // reverse order
+            // reverse
+            for (size_t i = 0, j = formalIdxs.size(); i < j / 2; ++i) {
+                int tmp = formalIdxs[i];
+                formalIdxs[i] = formalIdxs[j - 1 - i];
+                formalIdxs[j - 1 - i] = tmp;
+            }
+            // arity check
+            if (args.size() != formalIdxs.size()) {
+                reportError("call to '" + name + "': expected " + to_string(formalIdxs.size()) +
+                            " argument(s), got " + to_string(args.size()));
+            } else {
+                // arg types
+                for (size_t i = 0; i < args.size(); ++i) {
+                    SemanticType formalT;
+                    formalT.type = tab[formalIdxs[i]].type;
+                    if (!TypeCheck::assignmentCompatible(formalT, args[i])) {
+                        reportError("call to '" + name + "': argument " + to_string(i + 1) +
+                                    " expected " + TypeCheck::typeCodeName(formalT.type) +
+                                    ", got " + TypeCheck::typeCodeName(args[i].type));
+                    }
+                }
+            }
+        }
+
         annotate(node, result, idx);
     } else {
         annotate(node, result);
@@ -599,61 +828,135 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
 
 SemanticType SemanticAnalyzer::visitVariable(const NodePtr& node) {
     string name;
-    NodePtr component;
+    vector<NodePtr> components;
     for (const auto& child : node->children) {
         if (isIdentLabel(child->label, name)) continue;
-        if (child->label == "<component-variable>") component = child;
+        if (child->label == "<component-variable>") components.push_back(child);
     }
 
     int idx = name.empty() ? -1 : symbols.lookup(name);
     SemanticType resolved;
+    int currentRef = 0;
     if (idx < 0) {
         reportError("undeclared identifier '" + name + "'");
     } else {
-        resolved.type = symbols.getTab()[idx].type;
-        resolved.name.clear(); // variabel: tunjukkan tipe, bukan nama variabel
+        const auto& e = symbols.getTab()[idx];
+        resolved.type = e.type;
+        resolved.ref = e.ref;
+        resolved.name.clear();
+        currentRef = e.ref;
         annotate(node, resolved, idx);
     }
 
-    if (component) {
-        resolved = visitComponentVariable(component, resolved);
-        annotate(node, resolved, idx);
+    // walk components
+    for (const auto& comp : components) {
+        resolved = visitComponentVariable(comp, resolved);
+        currentRef = resolved.ref;
     }
+    (void)currentRef;
 
     if (idx < 0) annotate(node, resolved);
+    else annotate(node, resolved, idx);
     return resolved;
 }
 
 SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, SemanticType baseType) {
+    bool isIndex = false;
+    bool isField = false;
+    NodePtr fieldIdent;
     for (const auto& child : node->children) {
-        if (child->label == "<index-list>") {
-            visit(child);
-        } else if (child->label.rfind("ident(", 0) == 0) {
-            string field = extractTokenValue(child->label);
-            int idx = symbols.lookup(field);
-            if (idx < 0){
-                reportError("undeclared field '" + field + "'");
-            } else {
-                SemanticType ftype;
-                ftype.type = symbols.getTab()[idx].type;
-                ftype.name.clear();
-                annotate(child, ftype, idx);
+        if (child->label == "lbrack") isIndex = true;
+        else if (child->label == "period") isField = true;
+        else if (child->label == "<index-list>") {
+            for (const auto& idxNode : child->children) {
+                SemanticType idxType = visit(idxNode);
+                if (idxType.type == TC_NOTYPE) continue;
+                if (!TypeCheck::isOrdinal(idxType)) {
+                    reportError("array index must be ordinal type, got '" + typeName(idxType) + "'");
+                } else if (baseType.type == TC_ARRAY && baseType.ref > 0) {
+                    const auto& atab = symbols.getAtab();
+                    if (baseType.ref < (int)atab.size()) {
+                        int expectedXtyp = atab[baseType.ref].xtyp;
+                        if (idxType.type != expectedXtyp) {
+                            reportError("array index type incompatible: expected '" +
+                                        TypeCheck::typeCodeName(expectedXtyp) + "', got '" +
+                                        typeName(idxType) + "'");
+                        }
+                    }
+                }
             }
+        }
+        else if (child->label.rfind("ident(", 0) == 0 && isField) fieldIdent = child;
+    }
+
+    SemanticType result = baseType;
+
+    if (isField && fieldIdent) {
+        // lookup field
+        string field = extractTokenValue(fieldIdent->label);
+        if (baseType.type != TC_RECORD || baseType.ref <= 0) {
+            reportError("field access on non-record type");
+            result = SemanticType{};
         } else {
-            visit(child);
+            const auto& tab = symbols.getTab();
+            const auto& btab = symbols.getBtab();
+            int idx = btab[baseType.ref].last;
+            int found = -1;
+            // scan fields
+            while (idx != 0) {
+                const string& id = tab[idx].id;
+                bool match = id.size() == field.size();
+                for (size_t i = 0; match && i < id.size(); ++i) {
+                    if (tolower(static_cast<unsigned char>(id[i])) != tolower(static_cast<unsigned char>(field[i]))) match = false;
+                }
+                if (match) { found = idx; break; }
+                idx = tab[idx].link;
+            }
+            if (found < 0) {
+                reportError("undeclared field '" + field + "'");
+                result = SemanticType{};
+            } else {
+                result.type = tab[found].type;
+                result.ref = tab[found].ref;
+                result.name.clear();
+                annotate(fieldIdent, result, found);
+            }
+        }
+    } else if (isIndex) {
+        // array index
+        if (baseType.type != TC_ARRAY) {
+            reportError("index access on non-array type");
+            result = SemanticType{};
+        } else {
+            // TODO: full atab
+            const auto& atab = symbols.getAtab();
+            if (baseType.ref > 0 && baseType.ref < (int)atab.size()) {
+                result.type = atab[baseType.ref].etyp;
+                result.ref = atab[baseType.ref].eref;
+            } else {
+                // fallback int
+                result.type = TC_INTEGER;
+                result.ref = 0;
+            }
+            result.name.clear();
         }
     }
-    annotate(node, baseType);
-    return baseType;
+
+    annotate(node, result);
+    return result;
 }
 
 SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
     SemanticType left = node->children.empty() ? SemanticType{} : visit(node->children[0]);
     if (node->children.size() >= 3) {
+        if (node->children[1]) visit(node->children[1]); // rel op
         SemanticType right = visit(node->children[2]);
-        SemanticType result = basicType("boolean");
-        if (!(sameType(left, right) || (isNumeric(left) && isNumeric(right)))) {
-            reportError("relational expression has incompatible operands");
+
+        TypeCheck::TypeError err;
+        SemanticType result = TypeCheck::resultRelational(left, right, err);
+        if (err == TypeCheck::TypeError::IncompatibleOperand) {
+            reportError("relational expression has incompatible operands '" +
+                        typeName(left) + "' and '" + typeName(right) + "'");
         }
 
         annotate(node, result);
@@ -665,35 +968,71 @@ SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
-    // ambil tipe dari term 1
-    SemanticType result;
-    vector<SemanticType> terms;
+    SemanticType acc;
+    bool haveAcc = false;
+    bool hasUnarySgn = false;
+    string pendingOp;
     for (const auto& child : node->children) {
-        if (child->label == "<term>") terms.push_back(visit(child));
-        else visit(child);
+        if (child->label == "<term>") {
+            SemanticType t = visit(child);
+            if (!haveAcc) {
+                acc = t;
+                haveAcc = true;
+                // check unary sign requires numeric
+                if (hasUnarySgn && !isNumeric(t) && t.type != TC_NOTYPE)
+                    reportError("unary sign requires numeric operand, got '" + typeName(t) + "'");
+            } else {
+                acc = applyBinary(pendingOp, acc, t);
+                pendingOp.clear();
+            }
+        } else {
+            // unary sign (before first term) or binary op (after first term)
+            if (!haveAcc && (child->label == "plus" || child->label == "minus"))
+                hasUnarySgn = true;
+            if (haveAcc && (child->label == "plus" || child->label == "minus" ||
+                            child->label == "orsy")) {
+                pendingOp = child->label;
+            }
+            visit(child);
+        }
     }
 
-    if (!terms.empty()) result = terms.front();
-    annotate(node, result);
-    return result;
+    annotate(node, acc);
+    return acc;
 }
 
 SemanticType SemanticAnalyzer::visitTerm(const NodePtr& node) {
-    // ambil tipe dari factor 1
-    SemanticType result;
-    vector<SemanticType> factors;
+    SemanticType acc;
+    bool haveAcc = false;
+    string pendingOp;
     for (const auto& child : node->children) {
-        if (child->label == "<factor>") factors.push_back(visit(child));
-        else visit(child);
+        if (child->label == "<factor>") {
+            SemanticType f = visit(child);
+            if (!haveAcc) {
+                acc = f;
+                haveAcc = true;
+            } else {
+                acc = applyBinary(pendingOp, acc, f);
+                pendingOp.clear();
+            }
+        } else {
+            if (haveAcc && (child->label == "times" || child->label == "rdiv" ||
+                            child->label == "idiv" || child->label == "imod" ||
+                            child->label == "andsy")) {
+                pendingOp = child->label;
+            }
+            visit(child);
+        }
     }
 
-    if (!factors.empty()) result = factors.front();
-    annotate(node, result);
-    return result;
+    annotate(node, acc);
+    return acc;
 }
 
 SemanticType SemanticAnalyzer::visitFactor(const NodePtr& node) {
+    if (!node) return SemanticType{};
     for (const auto& child : node->children) {
+        if (!child) continue;
         if (child->label == "<variable>") return visitVariable(child);
         if (child->label == "<procedure/function-call>") return visitProcedureFunctionCall(child);
         if (child->label == "<expression>") return visitExpression(child);
@@ -722,10 +1061,19 @@ SemanticType SemanticAnalyzer::visitFactor(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitConstant(const NodePtr& node) {
+    bool negate = false;
     SemanticType result;
     for (const auto& child : node->children) {
-        if (child->label == "plus" || child->label == "minus") continue;
+        if (child->label == "minus") { negate = !negate; continue; }
+        if (child->label == "plus") continue;
         result = visit(child);
+    }
+    // apply negation to range value for named constants
+    if (negate && result.hasRange) {
+        result.low  = -result.low;
+        result.high = -result.high;
+        // swap so low <= high after negation
+        if (result.low > result.high) swap(result.low, result.high);
     }
 
     annotate(node, result);
@@ -750,17 +1098,37 @@ SemanticType SemanticAnalyzer::visitTypeNode(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
-    // range dipakai untuk subrange / array index
+    // subrange
     SemanticType result = basicType("integer");
     result.name = "subrange";
+    result.isSubrange = true;
     vector<SemanticType> bounds;
     for (const auto& child : node->children) {
         if (child->label == "<constant>") bounds.push_back(visitConstant(child));
         else visit(child);
     }
 
-    if (bounds.size() == 2 && (bounds[0].type == TC_REAL || bounds[1].type == TC_REAL)) {
-        reportError("range bounds cannot be real");
+    if (bounds.size() == 2) {
+        bool realBound = false;
+        bool orderBad = false;
+        TypeCheck::validateRangeBounds(bounds[0], bounds[1], realBound, orderBad);
+        if (realBound) {
+            reportError("range bounds cannot be real");
+        } else if (orderBad) {
+            reportError("range lower bound exceeds upper bound");
+        }
+
+        // subrange bounds
+        if (bounds[0].hasRange && bounds[1].hasRange) {
+            result.low = bounds[0].low;
+            result.high = bounds[1].high;
+            result.hasRange = true;
+        }
+        // basis type
+        int basis = bounds[0].type;
+        if (basis == TC_INTEGER || basis == TC_CHAR || basis == TC_BOOLEAN) {
+            result.type = basis;
+        }
     }
 
     annotate(node, result);
@@ -768,8 +1136,22 @@ SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
-    for (const auto& child : node->children){
-        visit(child);
+    // register enums
+    int ordinal = 0;
+    for (const auto& child : node->children) {
+        string name;
+        if (isIdentLabel(child->label, name)) {
+            if (lookupCurrentScope(symbols, name) >= 0) {
+                reportError("redeclared enumerated identifier '" + name + "'");
+            } else {
+                int idx = symbols.enter(name, (int)ObjClass::CONSTANT, TC_INTEGER, 0, true, symbols.currentLevel(), ordinal);
+                SemanticType t = basicType("integer");
+                annotate(child, t, idx);
+                ordinal++;
+            }
+        } else {
+            visit(child); // punctuation
+        }
     }
 
     SemanticType result = basicType("integer");
@@ -779,7 +1161,7 @@ SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
-    // analisis tipe array dan elemennya
+    // array type
     SemanticType indexType;
     SemanticType elementType;
     for (const auto& child : node->children) {
@@ -792,22 +1174,66 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
         }
     }
 
-    if (indexType.type == TC_REAL) reportError("array index type cannot be real");
-    SemanticType result = basicType("array");
+    if (!TypeCheck::validArrayIndex(indexType))
+        reportError("array index type must be simple type (not Real or structured)");
+
+    // array bounds
+    int low  = indexType.hasRange ? indexType.low  : 0;
+    int high = indexType.hasRange ? indexType.high : 0;
+    int elsz = 1; // element size
+    int size = (high >= low) ? (high - low + 1) * elsz : 0;
+
+    // enter atab
+    int atabIdx = symbols.enterArray(
+        indexType.type,   // index type
+        elementType.type, // element type
+        elementType.ref,  // element ref
+        low, high, elsz, size
+    );
+
+    SemanticType result;
     result.type = TC_ARRAY;
-    result.ref = 0;
+    result.ref  = atabIdx;
     annotate(node, result);
     return result;
 }
 
 SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
-    for (const auto& child : node->children){
-        visit(child);
+    int savedLevel = symbols.currentLevel();
+    // record bukan scope leksikal: btab dibuat, level TIDAK naik.
+    // enter() field akan diarahkan ke block ini via blockOverride.
+    int recordBlock = symbols.pushRecordBlock();
+
+    // iterate fields
+    for (const auto& child : node->children) {
+        if (child->label != "<field-list>") continue;
+        for (const auto& fp : child->children) {
+            if (fp->label != "<field-part>") continue;
+            vector<string> fieldNames;
+            SemanticType fieldType;
+            for (const auto& fc : fp->children) {
+                if (fc->label == "<identifier-list>") {
+                    for (const auto& id : fc->children) {
+                        string n;
+                        if (isIdentLabel(id->label, n)) fieldNames.push_back(n);
+                    }
+                } else if (fc->label == "<type>") {
+                    fieldType = visitTypeNode(fc);
+                }
+            }
+            for (const auto& fn : fieldNames) {
+                if (lookupCurrentScope(symbols, fn) >= 0) reportError("redeclared field '" + fn + "'");
+                else symbols.enter(fn, (int)ObjClass::VARIABLE, fieldType.type, fieldType.ref, true, savedLevel, 0);
+            }
+        }
     }
+
+    symbols.popRecordBlock();
 
     SemanticType result = basicType("record");
     result.type = TC_RECORD;
     result.anonymous = true;
+    result.ref = recordBlock; // field block
     annotate(node, result);
     return result;
 }
@@ -823,7 +1249,7 @@ SemanticType SemanticAnalyzer::visitFormalParameterList(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitParameterGroup(const NodePtr& node) {
-    // 1 grup param deengan tipe sama
+    // param group
     vector<string> names;
     SemanticType paramType;
     for (const auto& child : node->children) {
@@ -842,8 +1268,16 @@ SemanticType SemanticAnalyzer::visitParameterGroup(const NodePtr& node) {
     }
 
     for (const auto& name : names) {
-        if (lookupCurrentScope(symbols, name) >= 0) reportError("redeclared parameter '" + name + "'");
-        else symbols.enter(name, (int)ObjClass::VARIABLE, paramType.type, paramType.ref, true, symbols.currentLevel(), 0);
+        if (lookupCurrentScope(symbols, name) >= 0) {
+            reportError("redeclared parameter '" + name + "'");
+        } else {
+            // parameter name must not shadow outer-scope declarations (M3 QnA #16)
+            int outerIdx = symbols.lookup(name);
+            if (outerIdx >= 0 && symbols.getTab()[outerIdx].lev < symbols.currentLevel()) {
+                reportError("parameter '" + name + "' shadows outer declaration");
+            }
+            symbols.enter(name, (int)ObjClass::VARIABLE, paramType.type, paramType.ref, true, symbols.currentLevel(), 0);
+        }
     }
     
     annotate(node, paramType);
@@ -851,7 +1285,7 @@ SemanticType SemanticAnalyzer::visitParameterGroup(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitIdentifierList(const NodePtr& node, const SemanticType& type, const string& obj) {
-    // helper untuk daftar identifier
+    // identifier list
     (void)type;
     (void)obj;
     for (const auto& child : node->children) visit(child);
@@ -860,7 +1294,7 @@ SemanticType SemanticAnalyzer::visitIdentifierList(const NodePtr& node, const Se
 }
 
 void SemanticAnalyzer::printDecoratedTree(const NodePtr& root, ostream& out) const {
-    // tampilkan parse tree dengan anotasi semantic
+    // print tree
     printDecoratedTreeImpl(root, out, "", true, true);
 }
 
@@ -884,7 +1318,7 @@ string SemanticAnalyzer::decoratedLabel(const NodePtr& node) const {
 }
 
 void SemanticAnalyzer::printDecoratedTreeImpl(const NodePtr& node, ostream& out, const string& prefix, bool isLast, bool isRoot) const {
-    // cetak tree dengan penanda cabang
+    // print tree
     if (!node) return;
     if (isRoot) out << decoratedLabel(node) << "\n";
     else out << prefix << (isLast ? "└── " : "├── ") << decoratedLabel(node) << "\n";
@@ -896,16 +1330,16 @@ void SemanticAnalyzer::printDecoratedTreeImpl(const NodePtr& node, ostream& out,
 }
 
 void SemanticAnalyzer::printTabDump(ostream& out) const {
-    // tampilkan isi tab table
+    // dump tab
     symbols.dumpTab(out);
 }
 
 void SemanticAnalyzer::printBTabDump(ostream& out) const {
-    // tampilkan isi block table
+    // dump btab
     symbols.dumpBtab(out);
 }
 
 void SemanticAnalyzer::printATabDump(ostream& out) const {
-    // tampilkan isi address table
+    // dump atab
     symbols.dumpAtab(out);
 }

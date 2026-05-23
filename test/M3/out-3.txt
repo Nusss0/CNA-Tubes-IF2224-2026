@@ -1,0 +1,53 @@
+ProgramNode(name: 'Control')
++-- Declarations
+|   +-- VarDecl('a')
+|   |   \-- type: 'integer'
+|   +-- VarDecl('b')
+|   |   \-- type: 'integer'
+|   \-- VarDecl('i')
+|       \-- type: 'integer'
+\-- Block
+    +-- If
+    |   +-- BinOp(op: '>')
+    |   |   +-- left Var('a')
+    |   |   \-- right Num(0)
+    |   +-- Assign(...)
+    |   |   +-- target Var('b')
+    |   |   \-- value Num(1)
+    |   \-- Assign(...)
+    |       +-- target Var('b')
+    |       \-- value Num(0)
+    +-- Case
+    |   +-- Var('a')
+    |   \-- Block
+    |       +-- Num(1)
+    |       \-- Assign(...)
+    |           +-- target Var('b')
+    |           \-- value Num(1)
+    +-- While
+    |   +-- BinOp(op: '<')
+    |   |   +-- left Var('a')
+    |   |   \-- right Num(10)
+    |   \-- Block
+    |       \-- Assign(...)
+    |           +-- target Var('a')
+    |           \-- value BinOp(op: '+')
+    |               +-- left Var('a')
+    |               \-- right Num(1)
+    +-- Repeat
+    |   +-- Block
+    |   |   \-- Assign(...)
+    |   |       +-- target Var('a')
+    |   |       \-- value BinOp(op: '-')
+    |   |           +-- left Var('a')
+    |   |           \-- right Num(1)
+    |   \-- BinOp(op: '=')
+    |       +-- left Var('a')
+    |       \-- right Num(0)
+    \-- For(var: 'i', dir: 'to')
+        +-- Num(1)
+        +-- Num(10)
+        \-- Block
+            \-- Assign(...)
+                +-- target Var('a')
+                \-- value Var('i')

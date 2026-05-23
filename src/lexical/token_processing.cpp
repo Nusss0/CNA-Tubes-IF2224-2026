@@ -55,53 +55,53 @@ vector<Token> Tokenizing(const string &raw){
     State state = State::IDLE;
     int idx = 0;
     int size = raw.size();
-    string currWord; //var pembantu untuk wording nantinya
+    string currWord; // helper var
     while (idx <= size){
-        // Use sentinel '\0' when idx == size to avoid out-of-bounds access
+        // sentinel guard
         char c = (idx < size ? raw[idx] : '\0');
 
         switch (state)
         {
-        //kalau state IDLE / belum nerima apapun maka cek karakter pertama
+        // idle state
         case State::IDLE :
-            currWord = ""; //jaga"
-            //kalau masih space kosong, skip. State tetap IDLE
+            currWord = ""; // reset
+            // skip whitespace
             if(isspace(c) || c =='\r' || c=='\n' || c=='\0'){
                 idx++;
                 break;
             }
 
-            //kalau c berupa angka
+            // number
             else if(isdigit(c)){
-                currWord = c; //inisialisasi karena state masih IDLE
-                state = State::NUM; //lanjut proses di state NUM
+                currWord = c; // init
+                state = State::NUM; // number state
                 idx++; 
                 break;
             }
 
-            //kalau c berupa petik tunggal (')
+            // string start
             else if(c == '\''){
-                //skip isi petiknya
-                state = State::STRING; //ekspetasi awal ke Char dulu
+                // skip quote
+                state = State::STRING; // string state
                 idx++;
                 break;
             }
 
-            //kalau c itu karakter a-z / A-Z / _ maka statenya itu word
+            // identifier
             else if(isalpha(c) ){
-                currWord = c; //inisialisasi 
-                state = State::WORD; //lanjut proses di state WORD
+                currWord = c; // init 
+                state = State::WORD; // word state
                 idx++;
                 break;
             }
-            //Kalau +, maka masuk ke state PLUS
+            // plus
             else if(c == '+'){
                 tokens.push_back({"plus",""});
                 idx++;
                 break;
             }
 
-            //kalau -, masuk ke state MIN
+            // minus
             else if(c == '-'){
                 state = State::NEGATIVE;
                 currWord+=c;
@@ -109,21 +109,21 @@ vector<Token> Tokenizing(const string &raw){
                 break;
             }
 
-            //kalau *, masuk ke state TIMES
+            // times
             else if(c == '*'){
                 tokens.push_back({"times",""});
                 idx++;
                 break;
             }
 
-            //kalau /, masuk ke state RDIV
+            // rdiv
             else if(c == '/'){
                 tokens.push_back({"rdiv",""});
                 idx++;
                 break;
             }
 
-            //kalau =, masuk ke state EQ dan expect = lagi
+            // equals
             else if(c == '='){
                 currWord+=c;
                 state = State::EQ;
@@ -131,24 +131,24 @@ vector<Token> Tokenizing(const string &raw){
                 break;
             }
 
-            //kalau <, masuk ke state LE 
+            // less 
             else if(c == '<'){
-            //ga perlu save ke currword, cukup perhatiin karakter selanjutnya
+            // peek next
                 state = State::LE;
                 idx++;
                 break;
             }
 
-            //kalau >, masuk ke state GTR
+            // greater
             else if(c == '>'){
-            //ga perlu save ke currword, cukup perhatiin karakter selanjutnya
+            // peek next
                 state = State::GTR;
                 idx++;
                 break;
             }
 
             else if(c == '('){
-                //skip inclue ( dulu
+                // open paren
                 state = State::OPCMT;
                 idx++;
                 break;
@@ -189,7 +189,7 @@ vector<Token> Tokenizing(const string &raw){
                 break;
             }
             else if(c == '{'){
-                //skip include { di currWord
+                // curly comment
                 state = State::CURLCMNT;
                 idx++;
                 break;
@@ -200,136 +200,128 @@ vector<Token> Tokenizing(const string &raw){
                 break;
             }
         
-//-------------------------------------- STATE NUMBER ----------------------------------------
+// number state
         case State::NUM :
-            //cek number
+            // digit check
             if(isdigit(c)){
-                currWord+=c; //lanjut proses number
+                currWord+=c; // accumulate
                 idx++;
-                break; //next char
+                break; // next char
             }
-            else{ //number sudah habis, tokenisasi  
-                //kalau berupa titik, lanjut ke state Real
+            else{ // number end  
+                // real start
                 if(c == '.'){
-                    state= State::REAL; //masuk ke state Real
+                    state= State::REAL; // real state
                     currWord+=c;
-                    idx++; //skip dlu
+                    idx++; // advance
                     break;
                 }
-                else{ //sisanya tokenisasi INTCON(currWord) ke token
+                else{ // int token
                     tokens.push_back({"intcon",currWord});
                     state = State::IDLE;
-                    // tidak idx++, karakter saat ini belum diproses
+                    // reprocess char
                     break;
                 }
             }
 
-        //------------------------------------------ REAL STATE ----------------------------------------
+        // real state
         case State::REAL : 
-            if(isdigit(c)){ //setelah titik, harus masih berupa angka
+            if(isdigit(c)){ // real digit
                 currWord+=c;
                 idx++;
                 break;
             }
-            else if (!isdigit(raw[idx-1])){ //titik tidak diikuti angka, pisah jadi intcon + period
-                currWord.pop_back(); //hapus '.' dari currWord
+            else if (!isdigit(raw[idx-1])){ // bare dot
+                currWord.pop_back(); // drop dot
                 tokens.push_back({"intcon", currWord});
                 tokens.push_back({"period", ""});
                 currWord = "";
                 state = State::IDLE;
-                // tidak idx++, karakter saat ini belum diproses
+                // reprocess char
                 break;
             }
-            else{ //angka setelah titik sudah habis, tokenisasi sebagai realcon
+            else{ // real end
                 tokens.push_back({"realcon",currWord});
                 state = State::IDLE;
-                // tidak idx++, karakter saat ini belum diproses
+                // reprocess char
                 break;
             }
         
-        //---------------------------------------- STRING STATE ---------------------------------------------
+        // string state
         case State::STRING :
-            //Expect alpha atau ' , otherwise error
+            // expect quote
             if (c == '\''){
-                //skip petik
+                // skip quote
                 idx++;
                 state = State::ESCAPE;
                 break;
             }
-            else if(c == '\n' || c == '\0'){ //string tidak boleh multiline, langsung unknown
-                tokens.push_back({"unknown", "'" + currWord});//menambahkan ' diawal sebagai bagian dari unknown (karena di State string, petik di skip unutk)
+            else if(c == '\n' || c == '\0'){ // multiline guard
+                tokens.push_back({"unknown", "'" + currWord});// prepend quote
                 currWord = "";
                 state = State::IDLE;
                 break;
             }
-            else{ //karakter selain ' akan dianggap sebagai lanjutan
+            else{ // accumulate
                 currWord += c;
                 idx++;
                 break;
             }
-        //----------------------------------------- ESCAPE STATE ------------------------------------------
+        // escape state
         case State::ESCAPE : 
-        //Disini kondisi setelah char/string, jadi setelah menemukan ' kedua kalinya, akan masuk ke kondisi escape. Jika ditemukan ' lagi, maka akan dianggap sebagai 1 buah petik saja (escape character). Jika ditemukan selain ', lgsg EOF.
-        if (c == '\''){//secondary ' (berarti sebelumnya esc)
+        if (c == '\''){// escaped quote
             currWord+='\'';
             idx++;
             state = State::STRING;
             break;
         }
-        else { //kalau karakternya bukan ', langsung push 
-            //If currWord berupa 3 karakter (2 petik dan 1 alpha) berarti itu char
+        else { // push token
+            // char check
             if(currWord.size() == 1){
                 tokens.push_back({"charcon",currWord});
             }
             else{ //string
                 tokens.push_back({"string",currWord});
             }
-            state = State::IDLE; //balik ke state idle
-            //tidak perlu idx++, karena current karakter belum diproses
+            state = State::IDLE; // back to idle
+            // reprocess char
             break;
         }
 
-        //---------------------------------------------- STATE WORD ------------------------------------------
+        // word state
         case State::WORD :
-            //cek karakter
+            // check char
             if(isalpha(c) || isdigit(c)){
-                currWord += c; //lanjut proses kata 
+                currWord += c; // accumulate 
                 idx++;
-                break; //next char
+                break; // next char
             }
-            else{ //proses kata selesai, cek keyword
+            else{ // keyword check
 
-                // uppercase currWord untuk case-insensitive lookup
+                // uppercase
                 string upper = currWord;
                 for (char &ch : upper) ch = toupper(ch);
 
-                if (keyword.count(upper)) { //Kalau berada di keyword, maka langsung push dan mapping
+                if (keyword.count(upper)) { // keyword found
                     tokens.push_back({keyword[upper], ""});
                 } 
                 else{
                     tokens.push_back({"ident",currWord});
                 }
-                //tidak perlu idx++ karena karakter sekarang blm diproses
+                // reprocess char
                 state = State::IDLE;
                 break;
             }
 
-        //-------------------------------------------- STATE EQ -------------------------------------------
+        // eq state
         case State::EQ :
-            //cek karakter apakah =, kalau iya, pushback, kalau nga error
-            if(c == '='){
-                tokens.push_back({"eql",""});
-                idx++; //lanjut proses karakter selanjutnya (karena current char '=')
-                state = State::IDLE;
-                break;
-            }
-            else{
-                tokens.push_back({"unknown", "="});
-                state = State::IDLE;
-                break;
-            }
+            // pascal equal
+            // legacy note
+            tokens.push_back({"eql",""});
+            state = State::IDLE;
+            break;
 
-        //-------------------------------------------- STATE LE -------------------------------------------
+        // le state
         case State::LE :
             if(c=='>'){
                 tokens.push_back({"neq",""});
@@ -341,12 +333,12 @@ vector<Token> Tokenizing(const string &raw){
             }
             else{
                 tokens.push_back({"lss",""});
-                // tidak idx++, karakter saat ini belum diproses
+                // reprocess char
             }
             state = State::IDLE;
             break;
         
-        //-------------------------------------------- STATE LE -------------------------------------------
+        // gtr state
         case State::GTR :
             if(c=='='){
                 tokens.push_back({"geq",""});
@@ -354,13 +346,13 @@ vector<Token> Tokenizing(const string &raw){
             }
             else{
                 tokens.push_back({"gtr",""});
-                // tidak idx++, karakter saat ini belum diproses
+                // reprocess char
             }
             state = State::IDLE;
             break;
 
             
-            //-------------------------------------------- STATE COLON -------------------------------------------
+            // colon state
             case State::COLON :
                 if(c == '='){
                     tokens.push_back({"becomes",""});
@@ -368,37 +360,37 @@ vector<Token> Tokenizing(const string &raw){
                 }
                 else{
                     tokens.push_back({"colon",""});
-                    // tidak idx++, karakter saat ini belum diproses
+                    // reprocess char
                 }
                 state = State::IDLE;
                 break;
 
-            //-------------------------------------------- STATE CURLY COMMENTS -------------------------------------------
+            // curly comment
             case State::CURLCMNT :
-                if(c == '}'){ //comment slesai dengan }
-                    //skip }
+                if(c == '}'){ // comment end
+                    // skip brace
                     tokens.push_back({"comment",currWord});
                     state = State::IDLE;
                 }
-                else if(c == '*'){ //bisa juga ditutup dengan *)
-                    //skip include *
+                else if(c == '*'){ // star close
+                    // skip star
                     state = State::CLSCMT;
                 }
-                else{ //selainnya ditambahkan sebagai bagian komentar
+                else{ // accumulate
                     currWord+=c;
                 }
                 idx++;
                 break;
 
-            //-------------------------------------------- STATE Star COMMENTS -------------------------------------------
+            // star comment
             case State::COMMENTS :
-                if(c == '}'){ //bisa juga ditutup dengan }
-                    //skip include }
+                if(c == '}'){ // brace close
+                    // skip brace
                     tokens.push_back({"comment",currWord});
                     state = State::IDLE;
                 }
-                else if(c == '*'){//kalau ada bintang
-                    //skip inlcude *
+                else if(c == '*'){// star check
+                    // skip star
                     state = State::CLSCMT;
                 }
                 else{
@@ -407,49 +399,49 @@ vector<Token> Tokenizing(const string &raw){
                 idx++;
                 break;
 
-            //-------------------------------------------- STATE CLOSE COMMENT FOR STAR CMT -------------------------------------------
+            // close comment
             case State::CLSCMT :
-                if(c == ')'){ //comment slesai dengan *)
-                    //skip include )
+                if(c == ')'){ // comment end
+                    // skip paren
                     tokens.push_back({"comment",currWord});
                     state=State::IDLE;
                     idx++;
                     break;
                 }
-                else{ //bukan penutup, kembali baca sebagai isi komentar
-                    currWord += '*';//bukan penutup jadi include * yang dari sebelumya
+                else{ // not close
+                    currWord += '*';// restore star
                     state = State::COMMENTS;
-                    // tidak idx++, biarkan karakter ini diproses ulang di COMMENTS
+                    // reprocess char
                     break;
                 }
 
-            //-------------------------------------------- STATE OPEN COMMENTS -------------------------------------------
+            // open comment
             case State::OPCMT :
                 if(c == '*'){
-                    //skip include *
-                    state = State::COMMENTS; //state komentar
-                    idx++; //hanya ini yg butuh next char untuk lanjut proses
+                    // skip star
+                    state = State::COMMENTS; // comment state
+                    idx++; // advance
                 }
                 else{
-                    //hanya lparent biasa jadi
-                    currWord += '(';//meski redundant
-                    tokens.push_back({"lparent",""}); //else tokenize jadi lparent
+                    // left paren
+                    currWord += '(';// redundant
+                    tokens.push_back({"lparent",""}); // lparent token
                     state = State::IDLE;
                 }
-                //no need next char
+                // no advance
                 break;
 
-            //-------------------------------------------- STATE OPEN COMMENTS -------------------------------------------
+            // negative state
             case State::NEGATIVE :
-                if(isdigit(c)){//kalau berupa digit setelah -, maka akan dialihkan ke Number
+                if(isdigit(c)){// negative number
                     state = State::NUM;
-                    //idx tidak perlu di incr
+                    // no advance
                     break;
                 }
-                else{//kalau bukan digit, maka dianggap sebagai minus sign biasa
+                else{// minus sign
                     tokens.push_back({"minus",""});
                     state = State::IDLE;
-                    //tidak perlu idx++
+                    // no advance
                     break;
                 }   
             default :
@@ -457,7 +449,7 @@ vector<Token> Tokenizing(const string &raw){
                 idx++;
         }
     }
-    // kalau input selesai dalam kondisi state selain IDLE, maka token tidak dikenali
+    // unfinished token
     if(state != State::IDLE){
         tokens.push_back({"unknown", currWord});
     }

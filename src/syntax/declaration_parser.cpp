@@ -1,7 +1,6 @@
 #include "declaration_parser.hpp"
 
-// override base utk ngasih kutip single-quote di charcon/string,
-// supaya output parse tree konsisten sm ExprParser/StmtParser
+// quote char/string
 NodePtr DeclarationParser::makeTokenNode(const Token& token) const {
     if (token.value.empty()) {
         return makeNode(token.type);
@@ -12,7 +11,7 @@ NodePtr DeclarationParser::makeTokenNode(const Token& token) const {
     return makeNode(token.type + "(" + token.value + ")");
 }
 
-// format error legacy sub-parser: "Syntax error: unexpected token X(value), expected Y"
+// legacy error fmt
 void DeclarationParser::setError(const string& expected, const Token& found) {
     errorMessage = "Syntax error: unexpected token " + found.type;
     if (!found.value.empty()) {
@@ -29,7 +28,7 @@ bool DeclarationParser::isConstantStart(size_t offset) const {
 }
 
 bool DeclarationParser::isRangeAhead(size_t offset) const {
-    // pola: constant '..' constant -> butuh 3 token kedepan
+    // range lookahead
     if (pos + offset + 2 >= tokens.size()) return false;
     return isConstantStart(offset)
         && tokens[pos + offset + 1].type == "period"
@@ -37,22 +36,21 @@ bool DeclarationParser::isRangeAhead(size_t offset) const {
 }
 
 NodePtr DeclarationParser::parseDeclarationPart() {
-    // baca const/type/var section secara urut. subprogram (proc/func)
-    // di-handle Parser utama, bukan disini.
+    // const/type/var sections
     errorMessage.clear();
     auto root = makeNode("<declaration-part>");
 
-    // const section (opsional, harus paling awal)
+    // const section
     while (check("constsy")) {
         addChild(root, parseConstDeclaration());
         if (!errorMessage.empty()) return root;
     }
-    // type section (opsional, setelah const)
+    // type section
     while (check("typesy")) {
         addChild(root, parseTypeDeclaration());
         if (!errorMessage.empty()) return root;
     }
-    // var section (opsional, setelah type)
+    // var section
     while (check("varsy")) {
         addChild(root, parseVarDeclaration());
         if (!errorMessage.empty()) return root;

@@ -19,6 +19,7 @@ string astKindName(AstKind kind) {
         case AstKind::ConstDecl:        return "ConstDecl";
         case AstKind::TypeDecl:         return "TypeDecl";
         case AstKind::Block:            return "Block";
+        case AstKind::Declarations:     return "Declarations";
         case AstKind::Assign:           return "Assign";
         case AstKind::BinOp:            return "BinOp";
         case AstKind::UnaryOp:          return "UnaryOp";

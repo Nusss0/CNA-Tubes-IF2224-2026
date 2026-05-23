@@ -2,9 +2,7 @@
 
 #include "../std.hpp"
 
-// === Enum == //
-
-// enum untuk menjelaskan tipe dari Objek
+// enums
 enum class ObjClass {
     UNDEFINED = 0,
     CONSTANT = 1,
@@ -15,7 +13,7 @@ enum class ObjClass {
     PROGRAM = 6
 };
 
-// enum untuk menentukan code dari tipe
+
 enum TypeCode {
     TC_NOTYPE = 0,
     TC_INTEGER = 1,
@@ -27,7 +25,7 @@ enum TypeCode {
     TC_RECORD = 7
 };
 
-// tab Index untuk reserved word
+// reserved index
 namespace ReservedIdx {
     constexpr int PROGRAM = 19;
     constexpr int FUNCTION = 12;
@@ -39,9 +37,7 @@ namespace ReservedIdx {
     constexpr int STRING = 26;
 }
 
-// == Struct == //
-
-//  struktur entry suatu table
+// structs
 struct TabEntry {
     string id;    
     int link;   
@@ -53,7 +49,7 @@ struct TabEntry {
     int adr;    
 };
 
-// struktur satu baris dari sebuah entry block table
+
 struct BtabEntry {
     int last;   
     int lpar;   
@@ -61,7 +57,7 @@ struct BtabEntry {
     int vsze;   
 };
 
-// struktur satu entry untuk satu entry array table
+
 struct AtabEntry {
     int xtyp;   
     int etyp;   
@@ -72,34 +68,52 @@ struct AtabEntry {
     int size;   
 };
 
-// == Class == //
-
-// kelas untuk symbol table
+// class
 class SymbolTable {
     public:
         SymbolTable();
 
-        // regist sebuah identifier
+        // enter identifier
         int enter(const string& id, int obj, int type, int ref, bool nrm, int lev, int adr);
 
-        // lookup sebuah identifier
+        // link ref
+        void setRef(int tabIdx, int ref);
+
+        // mark param boundary
+        void markParamBoundary();
+
+        // lookup
         int lookup(const string& id) const;
 
-        // push dan pop sebuah block
+        // scope
         void pushBlock();
         void popBlock();
 
-        // mengecek current level dan block
-        int currentLevel() const { return level; }
-        int currentBlock() const { return display[level]; }
+        // push/pop record block: btab dibuat & diarahkan sebagai target enter(),
+        // TAPI level tidak naik (record bukan scope leksikal terpisah).
+        // return: indeks btab block record (utk disimpan di result.ref).
+        int pushRecordBlock();
+        void popRecordBlock();
 
-        // getter untuk Tab, Btab, Atab, dan Display
+        // array entry
+        int enterArray(int xtyp, int etyp, int eref, int low, int high, int elsz, int size);
+
+        // current scope
+        int currentLevel() const { return level; }
+        int currentBlock() const {
+            return blockOverride.empty() ? display[level] : blockOverride.back();
+        }
+
+        // predefined count
+        int predefinedCutoff() const { return predefinedEnd; }
+
+        // getters
         const vector<TabEntry>& getTab() const { return tab; }
         const vector<BtabEntry>& getBtab() const { return btab; }
         const vector<AtabEntry>& getAtab() const { return atab; }
         const vector<int>& getDisplay() const { return display; }
 
-        // melakukan dumping table
+        // dump
         void dumpTab(std::ostream& out) const;
         void dumpBtab(std::ostream& out) const;
         void dumpAtab(std::ostream& out) const;
@@ -109,13 +123,15 @@ class SymbolTable {
         vector<TabEntry> tab;
         vector<BtabEntry> btab;
         vector<AtabEntry> atab;
-        vector<int> display;   
-        int level;     
+        vector<int> display;
+        vector<int> blockOverride; // stack: target block utk enter() saat masuk record
+        int level;
+        int predefinedEnd = 0; //index terakhir + 1 utk reserved+predefined entries
 
-        // membuat entry table baru
+        // add entry
         int addTabEntry(const TabEntry& entry);
 
-        // initializer
+        // init
         void initReservedWords();
         void initPredefined();
 };

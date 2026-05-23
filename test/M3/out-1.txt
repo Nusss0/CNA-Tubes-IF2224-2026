@@ -1,0 +1,18 @@
+ProgramNode(name: 'Hello')
++-- Declarations
+|   +-- VarDecl('a')
+|   |   \-- type: 'integer'
+|   \-- VarDecl('b')
+|       \-- type: 'integer'
+\-- Block
+    +-- Assign(...)
+    |   +-- target Var('a')
+    |   \-- value Num(5)
+    +-- Assign(...)
+    |   +-- target Var('b')
+    |   \-- value BinOp(op: '+')
+    |       +-- left Var('a')
+    |       \-- right Num(10)
+    \-- ProcedureCall(name: 'writeln')
+        +-- String('Result = ')
+        \-- Var('b')
