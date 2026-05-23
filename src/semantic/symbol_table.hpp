@@ -89,12 +89,20 @@ class SymbolTable {
         void pushBlock();
         void popBlock();
 
+        // push/pop record block: btab dibuat & diarahkan sebagai target enter(),
+        // TAPI level tidak naik (record bukan scope leksikal terpisah).
+        // return: indeks btab block record (utk disimpan di result.ref).
+        int pushRecordBlock();
+        void popRecordBlock();
+
         // array entry
         int enterArray(int xtyp, int etyp, int eref, int low, int high, int elsz, int size);
 
         // current scope
         int currentLevel() const { return level; }
-        int currentBlock() const { return display[level]; }
+        int currentBlock() const {
+            return blockOverride.empty() ? display[level] : blockOverride.back();
+        }
 
         // predefined count
         int predefinedCutoff() const { return predefinedEnd; }
@@ -116,6 +124,7 @@ class SymbolTable {
         vector<BtabEntry> btab;
         vector<AtabEntry> atab;
         vector<int> display;
+        vector<int> blockOverride; // stack: target block utk enter() saat masuk record
         int level;
         int predefinedEnd = 0; //index terakhir + 1 utk reserved+predefined entries
 

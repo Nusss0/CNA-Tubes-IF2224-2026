@@ -25,10 +25,9 @@ string opSymbol(const string& label) {
 }
 
 int lookupCurrentScope(SymbolTable& symbols, const string& id) {
-    const auto& display = symbols.getDisplay();
     const auto& tab = symbols.getTab();
     const auto& btab = symbols.getBtab();
-    int blockIdx = display[symbols.currentLevel()];
+    int blockIdx = symbols.currentBlock();
     int idx = btab[blockIdx].last;
     // case-insensitive lookup
     auto eq = [](const string& a, const string& b) {
@@ -1182,8 +1181,9 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
 
 SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
     int savedLevel = symbols.currentLevel();
-    symbols.pushBlock();
-    int recordBlock = symbols.currentBlock();
+    // record bukan scope leksikal: btab dibuat, level TIDAK naik.
+    // enter() field akan diarahkan ke block ini via blockOverride.
+    int recordBlock = symbols.pushRecordBlock();
 
     // iterate fields
     for (const auto& child : node->children) {
@@ -1209,7 +1209,7 @@ SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
         }
     }
 
-    symbols.popBlock();
+    symbols.popRecordBlock();
 
     SemanticType result = basicType("record");
     result.type = TC_RECORD;

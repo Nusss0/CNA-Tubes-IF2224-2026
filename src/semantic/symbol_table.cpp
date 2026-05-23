@@ -155,7 +155,7 @@ int SymbolTable::addTabEntry(const TabEntry& entry) {
 
 // enter
 int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, int lev, int adr) {
-    int blockIdx = display[level];
+    int blockIdx = currentBlock();
     int prevLast = btab[blockIdx].last;
 
     TabEntry entry;
@@ -193,7 +193,7 @@ void SymbolTable::setRef(int tabIdx, int ref) {
 
 // mark params
 void SymbolTable::markParamBoundary() {
-    int blockIdx = display[level];
+    int blockIdx = currentBlock();
     btab[blockIdx].lpar = btab[blockIdx].last;
     btab[blockIdx].psze = btab[blockIdx].vsze;
 }
@@ -231,6 +231,18 @@ void SymbolTable::pushBlock() {
     btab.push_back({0, 0, 0, 0});
     ++level;
     display.push_back(static_cast<int>(btab.size()) - 1);
+}
+
+// push record block (tanpa naikkan level — record bukan scope leksikal)
+int SymbolTable::pushRecordBlock() {
+    btab.push_back({0, 0, 0, 0});
+    int newIdx = static_cast<int>(btab.size()) - 1;
+    blockOverride.push_back(newIdx); // arahkan enter() ke block ini
+    return newIdx;
+}
+
+void SymbolTable::popRecordBlock() {
+    if (!blockOverride.empty()) blockOverride.pop_back();
 }
 
 // pop block 
