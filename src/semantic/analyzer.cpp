@@ -186,6 +186,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
     if (label == "<if-statement>") return visitIfStatement(node);
     if (label == "<while-statement>") return visitWhileStatement(node);
     if (label == "<for-statement>") return visitForStatement(node);
+    if (label == "<repeat-statement>") return visitRepeatStatement(node);
     if (label == "<procedure/function-call>") return visitProcedureFunctionCall(node);
     if (label == "<variable>") return visitVariable(node);
     if (label == "<component-variable>") return visitComponentVariable(node, SemanticType{});
@@ -572,17 +573,15 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
     SemanticType endType;
     bool sawBecomes = false;
     bool sawDirection = false;
-    for (const auto& child : node->children) {
-        if (isIdentLabel(child->label, loopVar) && !sawBecomes) continue;
-        if (child->label == "becomes") {
-            sawBecomes = true;
-            continue;
-        }
+    NodePtr loopVarNode = nullptr;
 
-        if (child->label == "tosy" || child->label == "downtosy") {
-            sawDirection = true;
+    for (const auto& child : node->children) {
+        if (isIdentLabel(child->label, loopVar) && !sawBecomes) {
+            loopVarNode = child;
             continue;
         }
+        if (child->label == "becomes") { sawBecomes = true; continue; }
+        if (child->label == "tosy" || child->label == "downtosy") { sawDirection = true; continue; }
 
         if (child->label == "<expression>") {
             if (!sawBecomes) startType = visit(child);
@@ -592,21 +591,49 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
             visit(child);
         }
     }
+
+    // lookup dan anotasi variabel loop
     if (!loopVar.empty()) {
         int idx = symbols.lookup(loopVar);
-        if (idx < 0){
+        if (idx < 0) {
             reportError("undeclared loop variable '" + loopVar + "'");
+        } else {
+            SemanticType varType;
+            varType.type = symbols.getTab()[idx].type;
+            if (loopVarNode) annotate(loopVarNode, varType, idx);
+            // variabel loop harus ordinal (integer/char/boolean/subrange)
+            if (!TypeCheck::isOrdinal(varType) && varType.type != TC_NOTYPE) {
+                reportError("for loop variable '" + loopVar + "' must be ordinal type");
+            }
         }
     }
 
-    if (!isNumeric(startType) && startType.type != TC_NOTYPE){
-        reportError("for start expression must be numeric");
+    // batas ekspresi harus ordinal
+    if (!TypeCheck::isOrdinal(startType) && startType.type != TC_NOTYPE) {
+        reportError("for start expression must be ordinal (integer/char/boolean)");
+    }
+    if (!TypeCheck::isOrdinal(endType) && endType.type != TC_NOTYPE) {
+        reportError("for end expression must be ordinal (integer/char/boolean)");
     }
 
-    if (!isNumeric(endType) && endType.type != TC_NOTYPE){
-        reportError("for end expression must be numeric");
-    }
+    SemanticType result = basicType("void");
+    annotate(node, result);
+    return result;
+}
 
+SemanticType SemanticAnalyzer::visitRepeatStatement(const NodePtr& node) {
+    // <repeat-statement> ::= repeatsy + <statement-list> + untilsy + <expression>
+    // kunjungi semua child; cek expression (kondisi until) harus boolean
+    for (const auto& child : node->children) {
+        if (child->label == "<expression>") {
+            SemanticType cond = visit(child);
+            if (!isBoolean(cond) && cond.type != TC_NOTYPE) {
+                reportError("repeat-until condition must be boolean");
+            }
+        } else {
+            visit(child);
+        }
+    }
     SemanticType result = basicType("void");
     annotate(node, result);
     return result;
@@ -1013,9 +1040,24 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
     }
 
     if (!TypeCheck::validArrayIndex(indexType)) reportError("array index type cannot be real");
-    SemanticType result = basicType("array");
+
+    // hitung batas dan ukuran array untuk atab
+    int low  = indexType.hasRange ? indexType.low  : 0;
+    int high = indexType.hasRange ? indexType.high : 0;
+    int elsz = 1; // ukuran tiap elemen (unit sederhana)
+    int size = (high >= low) ? (high - low + 1) * elsz : 0;
+
+    // masukkan ke atab; result.ref menunjuk ke index entri atab
+    int atabIdx = symbols.enterArray(
+        indexType.type,   // xtyp: tipe indeks
+        elementType.type, // etyp: tipe elemen
+        elementType.ref,  // eref: ref ke tipe elemen jika komposit
+        low, high, elsz, size
+    );
+
+    SemanticType result;
     result.type = TC_ARRAY;
-    result.ref = 0;
+    result.ref  = atabIdx;
     annotate(node, result);
     return result;
 }

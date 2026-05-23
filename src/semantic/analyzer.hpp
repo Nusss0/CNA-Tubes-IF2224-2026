@@ -75,6 +75,8 @@ private:
     SemanticType visitWhileStatement(const NodePtr& node);
     // analisis for
     SemanticType visitForStatement(const NodePtr& node);
+    // analisis repeat-until
+    SemanticType visitRepeatStatement(const NodePtr& node);
     // analisis pemanggilan procedure/function
     SemanticType visitProcedureFunctionCall(const NodePtr& node);
     // analisis variabel

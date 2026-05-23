@@ -95,6 +95,9 @@ class SymbolTable {
         void pushBlock();
         void popBlock();
 
+        // enter sebuah array type entry ke atab; return index atab
+        int enterArray(int xtyp, int etyp, int eref, int low, int high, int elsz, int size);
+
         // mengecek current level dan block
         int currentLevel() const { return level; }
         int currentBlock() const { return display[level]; }

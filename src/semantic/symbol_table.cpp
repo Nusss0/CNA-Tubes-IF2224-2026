@@ -45,6 +45,10 @@ SymbolTable::SymbolTable() {
     btab.push_back({0, 0, 0, 0});
     btab[0].last = static_cast<int>(tab.size()) - 1;
 
+    // dummy atab[0] agar indeks array yang valid mulai dari 1
+    // (ref=0 berarti "tidak ada entri atab", ref>0 berarti indeks nyata)
+    atab.push_back({0, 0, 0, 0, 0, 0, 0});
+
     display.push_back(0);
     level = 0;
 }
@@ -212,6 +216,20 @@ int SymbolTable::lookup(const string& id) const {
     return -1;
 }
 
+// implementasi enterArray: tambah entry ke atab
+int SymbolTable::enterArray(int xtyp, int etyp, int eref, int low, int high, int elsz, int size) {
+    AtabEntry entry;
+    entry.xtyp = xtyp;
+    entry.etyp = etyp;
+    entry.eref = eref;
+    entry.low  = low;
+    entry.high = high;
+    entry.elsz = elsz;
+    entry.size = size;
+    atab.push_back(entry);
+    return static_cast<int>(atab.size()) - 1;
+}
+
 // implementasi method pushBlock untuk memasukkan sebuah lexical scope baru
 void SymbolTable::pushBlock() {
     btab.push_back({0, 0, 0, 0});
@@ -293,7 +311,8 @@ void SymbolTable::dumpBtab(ostream& out) const {
 void SymbolTable::dumpAtab(ostream& out) const {
     out << "\natab:\n";
 
-    if (atab.empty()) {
+    // atab[0] adalah dummy placeholder; kosong jika hanya dummy
+    if (atab.size() <= 1) {
         out << "(empty)\n";
         return;
     }
@@ -310,7 +329,8 @@ void SymbolTable::dumpAtab(ostream& out) const {
 
     out << string(50, '-') << '\n';
 
-    for (size_t i = 0; i < atab.size(); ++i) {
+    // mulai dari index 1 (skip dummy di index 0)
+    for (size_t i = 1; i < atab.size(); ++i) {
         out << right
             << setw(widths[0]) << i << ' '
             << setw(widths[1]) << atab[i].xtyp << ' '
