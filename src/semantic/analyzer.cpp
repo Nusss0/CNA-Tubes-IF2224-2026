@@ -629,6 +629,10 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
             if (!TypeCheck::isOrdinal(endType) && endType.type != TC_NOTYPE)
                 reportError("for end expression must be ordinal");
         } else {
+            // constant cannot be used as loop variable
+            if (symbols.getTab()[idx].obj == (int)ObjClass::CONSTANT)
+                reportError("cannot assign to constant '" + loopVar + "' (used as for-loop variable)");
+
             SemanticType varType;
             varType.type = symbols.getTab()[idx].type;
             if (loopVarNode) annotate(loopVarNode, varType, idx);
@@ -966,6 +970,7 @@ SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
 SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
     SemanticType acc;
     bool haveAcc = false;
+    bool hasUnarySgn = false;
     string pendingOp;
     for (const auto& child : node->children) {
         if (child->label == "<term>") {
@@ -973,12 +978,17 @@ SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
             if (!haveAcc) {
                 acc = t;
                 haveAcc = true;
+                // check unary sign requires numeric
+                if (hasUnarySgn && !isNumeric(t) && t.type != TC_NOTYPE)
+                    reportError("unary sign requires numeric operand, got '" + typeName(t) + "'");
             } else {
                 acc = applyBinary(pendingOp, acc, t);
                 pendingOp.clear();
             }
         } else {
-            // bin ops
+            // unary sign (before first term) or binary op (after first term)
+            if (!haveAcc && (child->label == "plus" || child->label == "minus"))
+                hasUnarySgn = true;
             if (haveAcc && (child->label == "plus" || child->label == "minus" ||
                             child->label == "orsy")) {
                 pendingOp = child->label;
@@ -1051,10 +1061,19 @@ SemanticType SemanticAnalyzer::visitFactor(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitConstant(const NodePtr& node) {
+    bool negate = false;
     SemanticType result;
     for (const auto& child : node->children) {
-        if (child->label == "plus" || child->label == "minus") continue;
+        if (child->label == "minus") { negate = !negate; continue; }
+        if (child->label == "plus") continue;
         result = visit(child);
+    }
+    // apply negation to range value for named constants
+    if (negate && result.hasRange) {
+        result.low  = -result.low;
+        result.high = -result.high;
+        // swap so low <= high after negation
+        if (result.low > result.high) swap(result.low, result.high);
     }
 
     annotate(node, result);

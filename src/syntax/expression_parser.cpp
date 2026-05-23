@@ -100,16 +100,7 @@ NodePtr ExpressionParser::parseProcedureFunctionCall() {
 
 NodePtr ExpressionParser::parseIndexList() {
     NodePtr node = makeNode("<index-list>");
-    Token t = peek();
-    if (t.type == "intcon" || t.type == "charcon" || t.type == "ident") {
-        string label = t.type;
-        if (t.type == "charcon") label += "('" + t.value + "')";
-        else label += "(" + t.value + ")";
-        addChild(node, makeNode(label));
-        advance();
-    } else {
-        consume("intcon", "<index-list>");
-    }
+    addChild(node, parseExpression());
     if (check("comma")) {
         advance();
         addChild(node, makeNode("comma"));
