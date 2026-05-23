@@ -225,7 +225,9 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
         int index = symbols.lookup(value);
         SemanticType type;
         if (index >= 0) {
-            type.type = symbols.getTab()[index].type;
+            const auto& e = symbols.getTab()[index];
+            type.type = e.type;
+            type.ref = e.ref;
             type.name.clear(); // use type code
             annotate(node, type, index);
         } else {
@@ -523,9 +525,31 @@ SemanticType SemanticAnalyzer::visitAssignmentStatement(const NodePtr& node) {
     // check assign
     SemanticType lhs;
     SemanticType rhs;
+    NodePtr lhsNode = nullptr;
     for (const auto& child : node->children) {
-        if (child->label == "<variable>" || (child->label.rfind("ident(", 0) == 0 && lhs.type == TC_NOTYPE)) lhs = visit(child);
+        if (child->label == "<variable>" || (child->label.rfind("ident(", 0) == 0 && lhs.type == TC_NOTYPE)) {
+            lhs = visit(child);
+            lhsNode = child;
+        }
         if (child->label == "<expression>") rhs = visit(child);
+    }
+
+    // cannot assign to constant
+    if (lhsNode) {
+        int tabIdx = lhsNode->tab_index;
+        if (tabIdx >= 0 && symbols.getTab()[tabIdx].obj == (int)ObjClass::CONSTANT) {
+            string name = extractTokenValue(lhsNode->label);
+            if (name.empty()) {
+                // try first ident child for <variable>
+                for (const auto& c : lhsNode->children) {
+                    if (c->label.rfind("ident(", 0) == 0) {
+                        name = extractTokenValue(c->label);
+                        break;
+                    }
+                }
+            }
+            reportError("cannot assign to constant '" + name + "'");
+        }
     }
 
     if (!assignmentCompatible(lhs, rhs)) {
@@ -647,22 +671,69 @@ SemanticType SemanticAnalyzer::visitRepeatStatement(const NodePtr& node) {
 SemanticType SemanticAnalyzer::visitCaseStatement(const NodePtr& node) {
     SemanticType selectorType;
     bool selectorSeen = false;
+    vector<pair<int, string>> seenLabels; // (type_code, raw_value)
+
+    // helper to recursively collect constants from nested case-blocks
+    function<void(const NodePtr&)> collectConstants = [&](const NodePtr& block) {
+        for (const auto& cbChild : block->children) {
+            if (cbChild->label == "<constant>") {
+                SemanticType labelType = visitConstant(cbChild);
+                // extract raw label value for duplicate detection
+                string rawVal;
+                int rawType = TC_NOTYPE;
+                for (const auto& cc : cbChild->children) {
+                    if (cc->label.rfind("intcon(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_INTEGER;
+                        break;
+                    } else if (cc->label.rfind("charcon(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_CHAR;
+                        break;
+                    } else if (cc->label.rfind("ident(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = labelType.type;
+                        break;
+                    } else if (cc->label.rfind("string(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_STRING;
+                        break;
+                    } else if (cc->label.rfind("realcon(", 0) == 0) {
+                        rawVal = extractTokenValue(cc->label);
+                        rawType = TC_REAL;
+                        break;
+                    }
+                }
+                if (selectorSeen && labelType.type != TC_NOTYPE &&
+                    !TypeCheck::compatible(selectorType, labelType)) {
+                    reportError("case label type '" + typeName(labelType) +
+                                "' is incompatible with selector type '" +
+                                typeName(selectorType) + "'");
+                }
+                // duplicate check
+                if (rawType != TC_NOTYPE) {
+                    for (const auto& seen : seenLabels) {
+                        if (seen.first == rawType && seen.second == rawVal) {
+                            reportError("duplicate case label '" + rawVal + "'");
+                            break;
+                        }
+                    }
+                    seenLabels.push_back({rawType, rawVal});
+                }
+            } else if (cbChild->label == "<case-block>") {
+                collectConstants(cbChild);
+            } else {
+                visit(cbChild);
+            }
+        }
+    };
+
     for (const auto& child : node->children) {
         if (child->label == "<expression>") {
             selectorType = visit(child);
             selectorSeen = true;
         } else if (child->label == "<case-block>") {
-            for (const auto& cbChild : child->children) {
-                if (cbChild->label == "<constant>") {
-                    SemanticType labelType = visitConstant(cbChild);
-                    if (selectorSeen && labelType.type != TC_NOTYPE &&
-                        !TypeCheck::compatible(selectorType, labelType)) {
-                        reportError("case label type '" + typeName(labelType) +
-                                    "' is incompatible with selector type '" +
-                                    typeName(selectorType) + "'");
-                    }
-                }
-            }
+            collectConstants(child);
         } else {
             visit(child);
         }
@@ -696,12 +767,17 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
 
     if (idx >= 0) {
         const auto& entry = symbols.getTab()[idx];
+        // must be a callable entity
+        bool isCallable = (entry.obj == (int)ObjClass::PROCEDURE ||
+                           entry.obj == (int)ObjClass::FUNCTION);
+        bool isPredef = idx < symbols.predefinedCutoff();
+        if (!isCallable && !isPredef) {
+            reportError("'" + name + "' is not a procedure or function");
+        }
         result.type = entry.type;
         result.name.clear();
 
-        // skip predef
-        bool isPredef = idx < symbols.predefinedCutoff();
-        if (!isPredef && entry.ref > 0) {
+        if (!isPredef && isCallable && entry.ref > 0) {
             // get params
             const auto& btab = symbols.getBtab();
             const auto& tab = symbols.getTab();
@@ -794,6 +870,16 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
                 if (idxType.type == TC_NOTYPE) continue;
                 if (!TypeCheck::isOrdinal(idxType)) {
                     reportError("array index must be ordinal type, got '" + typeName(idxType) + "'");
+                } else if (baseType.type == TC_ARRAY && baseType.ref > 0) {
+                    const auto& atab = symbols.getAtab();
+                    if (baseType.ref < (int)atab.size()) {
+                        int expectedXtyp = atab[baseType.ref].xtyp;
+                        if (idxType.type != expectedXtyp) {
+                            reportError("array index type incompatible: expected '" +
+                                        TypeCheck::typeCodeName(expectedXtyp) + "', got '" +
+                                        typeName(idxType) + "'");
+                        }
+                    }
                 }
             }
         }

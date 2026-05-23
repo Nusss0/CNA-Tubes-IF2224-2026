@@ -87,7 +87,16 @@ bool sameType(const SemanticType& a, const SemanticType& b) {
 
     if (a.type == TC_RECORD && b.type == TC_RECORD) {
         if (a.anonymous || b.anonymous) return false;
-        return !a.name.empty() && a.name == b.name;
+        if (!a.name.empty() && a.name == b.name) return true;
+        // fallback: same ref (same type definition block)
+        if (a.ref > 0 && a.ref == b.ref) return true;
+        return false;
+    }
+
+    if (a.type == TC_ARRAY && b.type == TC_ARRAY) {
+        // same ref means same array type definition
+        if (a.ref > 0 && a.ref == b.ref) return true;
+        return false;
     }
 
     if (a.type == b.type) return true;

@@ -10,4 +10,5 @@
 #include <iostream>
 #include <cctype>
 #include <cstring>
+#include <functional>
 using namespace std;
