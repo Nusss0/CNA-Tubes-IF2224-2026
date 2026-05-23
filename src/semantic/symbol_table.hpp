@@ -82,6 +82,12 @@ class SymbolTable {
         // regist sebuah identifier
         int enter(const string& id, int obj, int type, int ref, bool nrm, int lev, int adr);
 
+        // update ref field dari entry yg udah ada (utk link proc/func ke btab block-nya)
+        void setRef(int tabIdx, int ref);
+
+        // tandai batas akhir parameter di block saat ini (btab.lpar = btab.last skrg)
+        void markParamBoundary();
+
         // lookup sebuah identifier
         int lookup(const string& id) const;
 

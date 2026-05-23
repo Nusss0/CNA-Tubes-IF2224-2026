@@ -187,6 +187,17 @@ static bool sameId(const string& a, const string& b) {
     return true;
 }
 
+// link entry ke btab block (dipake utk proc/func -> param block)
+void SymbolTable::setRef(int tabIdx, int ref) {
+    if (tabIdx > 0 && tabIdx < (int)tab.size()) tab[tabIdx].ref = ref;
+}
+
+// tandai bahwa btab.last saat ini adalah parameter terakhir
+void SymbolTable::markParamBoundary() {
+    int blockIdx = display[level];
+    btab[blockIdx].lpar = btab[blockIdx].last;
+}
+
 // implementasi method lookup untuk mencari first match dari sebuah tab entry
 int SymbolTable::lookup(const string& id) const {
     for (int lev = level; lev >= 0; --lev) {

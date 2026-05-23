@@ -407,16 +407,24 @@ SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
     }
 
     SemanticType procType = basicType("void");
+    int procIdx = -1;
     if (!name.empty() && lookupCurrentScope(symbols, name) >= 0){
         reportError("redeclared procedure '" + name + "'");
     } else if (!name.empty()){
-        symbols.enter(name, (int)ObjClass::PROCEDURE, procType.type, 0, true, symbols.currentLevel(), 0);
+        procIdx = symbols.enter(name, (int)ObjClass::PROCEDURE, procType.type, 0, true, symbols.currentLevel(), 0);
     }
 
     symbols.pushBlock();
+    int procBlock = symbols.currentBlock();
+    //link proc tab entry ke btab block-nya biar call site bisa lookup param
+    if (procIdx >= 0) {
+        symbols.setRef(procIdx, procBlock);
+    }
     if (formalParams){
         visitFormalParameterList(formalParams);
     }
+    //tandai batas akhir parameter di btab.lpar
+    symbols.markParamBoundary();
 
     if (blockNode){
         visitBlock(blockNode, false);
@@ -456,16 +464,22 @@ SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
     }
 
     SemanticType returnType = returnTypeName.empty() ? basicType("void") : lookupTypeByName(returnTypeName);
+    int funcIdx = -1;
     if (!name.empty() && lookupCurrentScope(symbols, name) >= 0){
         reportError("redeclared function '" + name + "'");
     } else if (!name.empty()){
-        symbols.enter(name, (int)ObjClass::FUNCTION, returnType.type, returnType.ref, true, symbols.currentLevel(), 0);
+        funcIdx = symbols.enter(name, (int)ObjClass::FUNCTION, returnType.type, 0, true, symbols.currentLevel(), 0);
     }
 
     symbols.pushBlock();
+    int funcBlock = symbols.currentBlock();
+    if (funcIdx >= 0) {
+        symbols.setRef(funcIdx, funcBlock);
+    }
     if (formalParams){
         visitFormalParameterList(formalParams);
     }
+    symbols.markParamBoundary();
 
     if (blockNode){
         visitBlock(blockNode, false);
@@ -603,8 +617,17 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
     vector<SemanticType> args;
     for (const auto& child : node->children) {
         if (isIdentLabel(child->label, name)) continue;
-        if (child->label == "<expression>") args.push_back(visit(child));
-        else visit(child);
+        if (child->label == "<expression>") {
+            args.push_back(visit(child));
+        } else if (child->label == "<parameter-list>") {
+            //flatten <parameter-list> children -> ambil semua <expression>
+            for (const auto& pc : child->children) {
+                if (pc->label == "<expression>") args.push_back(visit(pc));
+                else visit(pc);
+            }
+        } else {
+            visit(child);
+        }
     }
 
     int idx = name.empty() ? -1 : symbols.lookup(name);
@@ -612,8 +635,53 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
     SemanticType result = basicType("void");
 
     if (idx >= 0) {
-        result.type = symbols.getTab()[idx].type;
-        result.name.clear(); // tampilkan tipe balik, bukan nama fungsi/prosedur
+        const auto& entry = symbols.getTab()[idx];
+        result.type = entry.type;
+        result.name.clear();
+
+        //skip param check utk predefined (writeln/readln) - mereka variadic
+        bool isPredef = idx < symbols.predefinedCutoff();
+        if (!isPredef && entry.ref > 0) {
+            //ambil formal params dari btab block-nya
+            const auto& btab = symbols.getBtab();
+            const auto& tab = symbols.getTab();
+            int paramBlock = entry.ref;
+            int lastParam = btab[paramBlock].lpar;
+            //walk linked-list dari lpar mundur via link
+            vector<int> formalIdxs;
+            int cur = lastParam;
+            while (cur != 0) {
+                formalIdxs.push_back(cur);
+                cur = tab[cur].link;
+            }
+            //chain terbalik (paling akhir di-enter di depan), reverse biar urut deklarasi
+            //tp blocks linked via tab[].link mundur, jadi reverse pakai
+            //utk dapet urutan deklarasi: kita perlu reverse formalIdxs
+            //(actually link punya prev_idx, jadi traversal kita = reverse declaration order)
+            //reverse:
+            for (size_t i = 0, j = formalIdxs.size(); i < j / 2; ++i) {
+                int tmp = formalIdxs[i];
+                formalIdxs[i] = formalIdxs[j - 1 - i];
+                formalIdxs[j - 1 - i] = tmp;
+            }
+            //arity check
+            if (args.size() != formalIdxs.size()) {
+                reportError("call to '" + name + "': expected " + to_string(formalIdxs.size()) +
+                            " argument(s), got " + to_string(args.size()));
+            } else {
+                //per-arg type compat
+                for (size_t i = 0; i < args.size(); ++i) {
+                    SemanticType formalT;
+                    formalT.type = tab[formalIdxs[i]].type;
+                    if (!TypeCheck::assignmentCompatible(formalT, args[i])) {
+                        reportError("call to '" + name + "': argument " + to_string(i + 1) +
+                                    " expected " + TypeCheck::typeCodeName(formalT.type) +
+                                    ", got " + TypeCheck::typeCodeName(args[i].type));
+                    }
+                }
+            }
+        }
+
         annotate(node, result, idx);
     } else {
         annotate(node, result);
@@ -905,26 +973,26 @@ SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
 
 SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
     // <enumerated> ::= ( ident { , ident } )
-    // Type enumerated ditentukan oleh ident di dalamnya; semua ident harus
-    // bertipe sama (spec hal. 15).
-    SemanticType common;
-    bool haveCommon = false;
-    bool mismatch = false;
+    // Register tiap ident sebagai constant di scope saat ini agar bisa dipakai
+    // sebagai literal nilai (spec hal. 15: enumerated ident jadi nilai).
+    int ordinal = 0;
     for (const auto& child : node->children) {
-        SemanticType t = visit(child); // anotasi + lookup/undeclared utk ident
-        if (child->label.rfind("ident(", 0) == 0 && t.type != TC_NOTYPE) {
-            if (!haveCommon) {
-                common = t;
-                haveCommon = true;
-            } else if (common.type != t.type) {
-                mismatch = true;
+        string name;
+        if (isIdentLabel(child->label, name)) {
+            if (lookupCurrentScope(symbols, name) >= 0) {
+                reportError("redeclared enumerated identifier '" + name + "'");
+            } else {
+                int idx = symbols.enter(name, (int)ObjClass::CONSTANT, TC_INTEGER, 0, true, symbols.currentLevel(), ordinal);
+                SemanticType t = basicType("integer");
+                annotate(child, t, idx);
+                ordinal++;
             }
+        } else {
+            visit(child); //comma & paren ga relevan
         }
     }
 
-    if (mismatch) reportError("enumerated members must have the same type");
-
-    SemanticType result = haveCommon ? common : basicType("integer");
+    SemanticType result = basicType("integer");
     result.name = "enumerated";
     annotate(node, result);
     return result;

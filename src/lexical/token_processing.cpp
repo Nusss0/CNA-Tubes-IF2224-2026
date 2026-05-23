@@ -316,18 +316,12 @@ vector<Token> Tokenizing(const string &raw){
 
         //-------------------------------------------- STATE EQ -------------------------------------------
         case State::EQ :
-            //cek karakter apakah =, kalau iya, pushback, kalau nga error
-            if(c == '='){
-                tokens.push_back({"eql",""});
-                idx++; //lanjut proses karakter selanjutnya (karena current char '=')
-                state = State::IDLE;
-                break;
-            }
-            else{
-                tokens.push_back({"unknown", "="});
-                state = State::IDLE;
-                break;
-            }
+            //Pascal pakai single '=' utk eql. token udah di-emit saat masuk state ini,
+            //jadi langsung selesai tanpa consume karakter berikutnya.
+            //(legacy: dulu expect '==' style C, sekarang dibalik)
+            tokens.push_back({"eql",""});
+            state = State::IDLE;
+            break;
 
         //-------------------------------------------- STATE LE -------------------------------------------
         case State::LE :
