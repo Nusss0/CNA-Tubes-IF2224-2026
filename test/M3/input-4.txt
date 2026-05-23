@@ -1,0 +1,20 @@
+program Subprograms;
+
+procedure Swap(a, b: integer);
+var
+  temp: integer;
+begin
+  temp := a;
+  a := b;
+  b := temp;
+end;
+
+function Add(a, b: integer): integer;
+begin
+  Add := a + b;
+end;
+
+begin
+  Swap(a, b);
+  c := Add(1, 2);
+end.
