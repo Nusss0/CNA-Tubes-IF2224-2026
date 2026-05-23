@@ -11,55 +11,29 @@ static string formatNode(const AstNodePtr& node) {
         case AstKind::Program:
             return "ProgramNode(name: '" + node->value + "')";
 
-        case AstKind::VarDecl: {
-            string type = "unknown";
-            if (!node->children.empty() && node->children[0]->kind == AstKind::TypeRef)
-                type = node->children[0]->value;
-            return "VarDecl(name: '" + node->value + "', type: '" + type + "')";
-        }
+        case AstKind::VarDecl:
+            return "VarDecl('" + node->value + "')";
 
-        case AstKind::ConstDecl: {
-            string val = node->children.empty() ? "null" : formatNode(node->children[0]);
-            return "ConstDecl(name: '" + node->value + "', value: " + val + ")";
-        }
+        case AstKind::ConstDecl:
+            return "ConstDecl('" + node->value + "')";
 
         case AstKind::TypeDecl:
-            return "TypeDecl(name: '" + node->value + "')";
+            return "TypeDecl('" + node->value + "')";
 
-        case AstKind::Assign: {
-            string target = node->children.size() > 0 ? formatNode(node->children[0]) : "null";
-            string value  = node->children.size() > 1 ? formatNode(node->children[1]) : "null";
-            return "Assign(target: " + target + ", value: " + value + ")";
-        }
+        case AstKind::Assign:
+            return "Assign(...)";
 
-        case AstKind::BinOp: {
-            string left  = node->children.size() > 0 ? formatNode(node->children[0]) : "null";
-            string right = node->children.size() > 1 ? formatNode(node->children[1]) : "null";
-            return "BinOp(op: '" + node->value + "', left: " + left + ", right: " + right + ")";
-        }
+        case AstKind::BinOp:
+            return "BinOp(op: '" + node->value + "')";
 
-        case AstKind::UnaryOp: {
-            string operand = node->children.empty() ? "null" : formatNode(node->children[0]);
-            return "UnaryOp(op: '" + node->value + "', operand: " + operand + ")";
-        }
+        case AstKind::UnaryOp:
+            return "UnaryOp(op: '" + node->value + "')";
 
-        case AstKind::ProcCall: {
-            string args;
-            for (size_t i = 0; i < node->children.size(); ++i) {
-                if (i) args += ", ";
-                args += formatNode(node->children[i]);
-            }
-            return "ProcedureCall(name: '" + node->value + "', args: [" + args + "])";
-        }
+        case AstKind::ProcCall:
+            return "ProcedureCall(name: '" + node->value + "')";
 
-        case AstKind::FuncCall: {
-            string args;
-            for (size_t i = 0; i < node->children.size(); ++i) {
-                if (i) args += ", ";
-                args += formatNode(node->children[i]);
-            }
-            return "FunctionCall(name: '" + node->value + "', args: [" + args + "])";
-        }
+        case AstKind::FuncCall:
+            return "FunctionCall(name: '" + node->value + "')";
 
         case AstKind::Number:
             return "Num(" + node->value + ")";
@@ -78,9 +52,6 @@ static string formatNode(const AstNodePtr& node) {
 
         case AstKind::BoolLit:
             return "Bool(" + node->value + ")";
-
-        case AstKind::TypeRef:
-            return "type: '" + node->value + "'";
 
         case AstKind::FieldAccess: {
             string base = node->children.empty() ? "null" : formatNode(node->children[0]);
@@ -123,47 +94,23 @@ static string formatNode(const AstNodePtr& node) {
             return "RangeType";
         case AstKind::SubprogramHeader:
             return "SubprogramHeader";
+        case AstKind::TypeRef:
+            return "type: '" + node->value + "'";
 
         default:
             return astKindName(node->kind) + "(" + node->value + ")";
     }
 }
 
-// node yang child-nya sudah di-inline di label, jangan expand lagi
-static bool skipChildren(AstKind k) {
-    switch (k) {
-        case AstKind::Assign:
-        case AstKind::BinOp:
-        case AstKind::UnaryOp:
-        case AstKind::ProcCall:
-        case AstKind::FuncCall:
-        case AstKind::VarDecl:
-        case AstKind::ConstDecl:
-        case AstKind::TypeDecl:
-        case AstKind::FieldAccess:
-        case AstKind::IndexAccess:
-        case AstKind::Number:
-        case AstKind::RealNumber:
-        case AstKind::Var:
-        case AstKind::StringLit:
-        case AstKind::CharLit:
-        case AstKind::BoolLit:
-        case AstKind::TypeRef:
-        case AstKind::SubprogramHeader:
-            return true;
-        default:
-            return false;
-    }
-}
-
-static string labelOf(const AstNodePtr& node) {
+static string labelOf(const AstNodePtr& node, const string& base = "") {
     if (!node) return "";
-    string s = formatNode(node);
+    string s = base.empty() ? formatNode(node) : base;
     // anotasi (cuma muncul kalau udah didekorasi)
     vector<string> anno;
     if (!node->typeName.empty()) anno.push_back("type:" + node->typeName);
     if (node->tabIndex >= 0)     anno.push_back("tab:" + to_string(node->tabIndex));
     if (node->lev >= 0)          anno.push_back("lev:" + to_string(node->lev));
+    if (node->blockIndex >= 0)   anno.push_back("blk:" + to_string(node->blockIndex));
     if (!anno.empty()) {
         s += "  -> ";
         for (size_t i = 0; i < anno.size(); i++) {
@@ -174,19 +121,61 @@ static string labelOf(const AstNodePtr& node) {
     return s;
 }
 
-static void printAstImpl(const AstNodePtr& node, ostream& out, const string& prefix, bool isLast, bool isRoot) {
+// label child khusus sesuai parent kind (spec hal. 23)
+static string childLabel(const AstNodePtr& parent, size_t idx, const AstNodePtr& child) {
+    if (!parent || !child) return "";
+
+    switch (parent->kind) {
+        case AstKind::Assign:
+            if (idx == 0) return "target " + formatNode(child);
+            if (idx == 1) return "value "  + formatNode(child);
+            break;
+        case AstKind::BinOp:
+            if (idx == 0) return "left "  + formatNode(child);
+            if (idx == 1) return "right " + formatNode(child);
+            break;
+        case AstKind::UnaryOp:
+            if (idx == 0) return "operand " + formatNode(child);
+            break;
+        case AstKind::ProcCall:
+        case AstKind::FuncCall:
+            return formatNode(child);
+        default:
+            break;
+    }
+    return formatNode(child);
+}
+
+// node yang nggak punya child bermakna — diperlakukan sebagai leaf
+static bool isLeaf(AstKind k) {
+    switch (k) {
+        case AstKind::Number:
+        case AstKind::RealNumber:
+        case AstKind::Var:
+        case AstKind::StringLit:
+        case AstKind::CharLit:
+        case AstKind::BoolLit:
+        case AstKind::TypeRef:
+            return true;
+        default:
+            return false;
+    }
+}
+
+static void printAstImpl(const AstNodePtr& node, ostream& out, const string& prefix, bool isLast, bool isRoot, const string& customLabel = "") {
     if (!node) return;
+    string display = customLabel.empty() ? labelOf(node) : labelOf(node, customLabel);
     if (isRoot) {
-        out << labelOf(node) << "\n";
+        out << display << "\n";
     } else {
         out << prefix;
         if (isLast) out << "\\-- ";
         else        out << "+-- ";
-        out << labelOf(node) << "\n";
+        out << display << "\n";
     }
 
-    // kalau node ini child-nya sudah inline, berhenti
-    if (skipChildren(node->kind)) return;
+    // leaf: stop
+    if (isLeaf(node->kind)) return;
 
     string childPrefix;
     if (isRoot) {
@@ -197,11 +186,19 @@ static void printAstImpl(const AstNodePtr& node, ostream& out, const string& pre
         childPrefix = prefix + "|   ";
     }
 
+    // tampilkan semua child yang ada
     for (size_t i = 0; i < node->children.size(); i++) {
         auto& c = node->children[i];
         if (!c) continue;
         bool lastChild = (i + 1 == node->children.size());
-        printAstImpl(c, out, childPrefix, lastChild, false);
+        string clbl = childLabel(node, i, c);
+        if (clbl == formatNode(c)) {
+            // nggak ada custom label, pakai default recursive
+            printAstImpl(c, out, childPrefix, lastChild, false);
+        } else {
+            // pakai custom label
+            printAstImpl(c, out, childPrefix, lastChild, false, clbl);
+        }
     }
 }
 

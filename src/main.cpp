@@ -108,9 +108,14 @@ int main() {
       }
    }
 
-   // ---------------- Semantic Analysis: AST construction ----------------
-   //skip kalau parsing gagal total
-   if (!root) return 0;
+    // ---------------- Semantic Analysis: AST construction ----------------
+    // skip kalau parsing gagal atau ada syntax error
+    if (!root || parser.hasError()) {
+       if (parser.hasError()) {
+          cout << "\n[INFO] Semantic analysis skipped due to syntax error(s).\n";
+       }
+       return 0;
+    }
 
    cout << "\n=== Abstract Syntax Tree ===\n";
    AstBuilder builder;
