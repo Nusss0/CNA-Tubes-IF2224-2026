@@ -28,7 +28,7 @@ void AstDecorator::annotateFromTab(const AstNodePtr& node, const string& id) {
         node->tabIndex = idx;
         node->typeName = typeNameFromCode(e.type);
         node->lev = e.lev;
-        //predefined: entry yg di-insert saat init symbol table (reserved + true/false/readln/writeln)
+        // predefined entry
         if (idx < symbols.predefinedCutoff()) {
             node->predefined = true;
         }
@@ -40,49 +40,49 @@ void AstDecorator::visit(const AstNodePtr& node) {
 
     AstKind k = node->kind;
 
-    // node yang butuh lookup symbol table
+    // lookup nodes
     if (k == AstKind::Var) {
         annotateFromTab(node, node->value);
     } else if (k == AstKind::VarDecl || k == AstKind::ConstDecl || k == AstKind::TypeDecl) {
         annotateFromTab(node, node->value);
-        // deklarasi ga perlu propagasi block/lev ke child type ref
+        // no block/lev propagation
     } else if (k == AstKind::ProcCall || k == AstKind::FuncCall) {
         annotateFromTab(node, node->value);
-        //promote ke FuncCall kalau tab entry obj == FUNCTION
+        // promote func call
         if (node->tabIndex >= 0) {
             const auto& e = symbols.getTab()[node->tabIndex];
             if (e.obj == (int)ObjClass::FUNCTION) {
                 node->kind = AstKind::FuncCall;
-                //type sudah di-set sm annotateFromTab dari e.type (return type fungsi)
+                // return type already set
             } else if (e.obj == (int)ObjClass::PROCEDURE) {
                 node->kind = AstKind::ProcCall;
                 node->typeName = "void";
             }
         } else {
-            //predefined sblm lookup gagal: writeln/readln dianggap procedure
+            // predefined procedure
             if (k == AstKind::ProcCall) node->typeName = "void";
         }
     } else if (k == AstKind::SubprogramDecl) {
         annotateFromTab(node, node->value);
     }
-    // literal: typeName langsung
+    // literals
     else if (k == AstKind::Number)     { node->typeName = "integer"; }
     else if (k == AstKind::RealNumber) { node->typeName = "real"; }
     else if (k == AstKind::CharLit)    { node->typeName = "char"; }
     else if (k == AstKind::StringLit)  { node->typeName = "string"; }
     else if (k == AstKind::BoolLit)    { node->typeName = "boolean"; }
-    // container / control flow: void
+    // control flow
     else if (k == AstKind::Assign || k == AstKind::If || k == AstKind::While ||
              k == AstKind::For || k == AstKind::Repeat || k == AstKind::Case ||
              k == AstKind::Compound || k == AstKind::Empty) {
         node->typeName = "void";
     }
-    // type ref: pakai value-nya sebagai nama tipe
+    // type ref
     else if (k == AstKind::TypeRef) {
         node->typeName = node->value;
     }
 
-    // block tracking utk Compound (main body, procedure body, dll)
+    // compound block
     if (k == AstKind::Compound) {
         int savedBlock = currBlock;
         int savedLev = currLev;
@@ -96,7 +96,7 @@ void AstDecorator::visit(const AstNodePtr& node) {
         return;
     }
 
-    // inferensi tipe utk BinOp & UnaryOp
+    // type inference
     if (k == AstKind::BinOp) {
         for (auto& c : node->children) visit(c);
         string leftT, rightT;

@@ -11,7 +11,7 @@ string toLowerCopy(string text) {
 
 namespace TypeCheck {
 
-// === Klasifikasi === //
+// classify
 
 bool isError(const SemanticType& t) {
     return t.type == TC_NOTYPE;
@@ -55,7 +55,7 @@ bool isBoolean(const SemanticType& t) {
     return t.type == TC_BOOLEAN;
 }
 
-// === Penamaan === //
+// naming
 
 string typeCodeName(int type) {
     switch (type) {
@@ -75,29 +75,21 @@ string describe(const SemanticType& t) {
     return typeCodeName(t.type);
 }
 
-// === Relasi tipe === //
+// relation
 
 bool sameType(const SemanticType& a, const SemanticType& b) {
     if (isError(a) || isError(b)) return false;
 
-    // string: identik bila panjang sama (bila panjang diketahui)
     if (a.type == TC_STRING && b.type == TC_STRING) {
         if (a.hasLen && b.hasLen) return a.len == b.len;
-        return true; // panjang salah satu tak diketahui -> anggap cocok
+        return true;
     }
 
-    // record: hanya named record dengan nama sama yang identik.
-    // record anonim ditolak (lihat juga compatible/assignmentCompatible).
     if (a.type == TC_RECORD && b.type == TC_RECORD) {
         if (a.anonymous || b.anonymous) return false;
         return !a.name.empty() && a.name == b.name;
     }
 
-    // tipe simple & subrange: cukup bandingkan kode tipe (basis subrange ada di
-    // field type). Nama tidak dibandingkan karena lookup variabel mengosongkan
-    // name sedangkan literal mengisinya (mis. integer dari var vs intcon).
-    // - subrange vs tipe basisnya     (mis. [1..10] dengan Integer)
-    // - dua subrange dari basis sama   (mis. [1..10] dengan [50..100])
     if (a.type == b.type) return true;
 
     return false;
@@ -106,7 +98,6 @@ bool sameType(const SemanticType& a, const SemanticType& b) {
 bool compatible(const SemanticType& a, const SemanticType& b) {
     if (isError(a) || isError(b)) return true;
 
-    // record anonim tidak pernah kompatibel
     if ((a.type == TC_RECORD && a.anonymous) ||
         (b.type == TC_RECORD && b.anonymous)) {
         return false;
@@ -114,8 +105,8 @@ bool compatible(const SemanticType& a, const SemanticType& b) {
 
     if (sameType(a, b)) return true;
 
-    // numeric saling kompatibel (integer/real/subrange)
-    if (isNumeric(a) && isNumeric(b)) return true;
+    if ((a.name == "enumerated" || b.name == "enumerated") && a.type == b.type)
+        return true;
 
     return false;
 }
@@ -123,21 +114,18 @@ bool compatible(const SemanticType& a, const SemanticType& b) {
 bool assignmentCompatible(const SemanticType& lhs, const SemanticType& rhs) {
     if (isError(lhs) || isError(rhs)) return true;
 
-    // record anonim tidak dapat di-assign
     if ((lhs.type == TC_RECORD && lhs.anonymous) ||
         (rhs.type == TC_RECORD && rhs.anonymous)) {
         return false;
     }
 
     if (sameType(lhs, rhs)) {
-        // subset value range: rhs harus berada dalam rentang lhs (best-effort)
         if (lhs.hasRange && rhs.hasRange) {
             return rhs.low >= lhs.low && rhs.high <= lhs.high;
         }
         return true;
     }
 
-    // Real <- Integer (promosi)
     if (lhs.type == TC_REAL && (rhs.type == TC_INTEGER || rhs.isSubrange)) {
         return true;
     }
@@ -145,25 +133,22 @@ bool assignmentCompatible(const SemanticType& lhs, const SemanticType& rhs) {
     return false;
 }
 
-// === Inferensi operator biner === //
+// binary op
 
 SemanticType resultBinary(const string& op, const SemanticType& a,
                           const SemanticType& b, TypeError& err) {
     err = TypeError::None;
 
-    // operand error
     if (isError(a) || isError(b)) {
         err = TypeError::None;
         return SemanticType{};
     }
 
-    // logika: and / or
     if (op == "andsy" || op == "orsy") {
         if (!isBoolean(a) || !isBoolean(b)) err = TypeError::NonBoolean;
         return makeBasic("boolean");
     }
 
-    // div / mod: integer saja
     if (op == "idiv" || op == "imod") {
         bool aInt = a.type == TC_INTEGER || a.isSubrange;
         bool bInt = b.type == TC_INTEGER || b.isSubrange;
@@ -171,13 +156,20 @@ SemanticType resultBinary(const string& op, const SemanticType& a,
         return makeBasic("integer");
     }
 
-    // pembagian real '/': selalu real
     if (op == "rdiv") {
         if (!isNumeric(a) || !isNumeric(b)) err = TypeError::NonNumeric;
         return makeBasic("real");
     }
 
-    // aritmetika + - *
+    if (op == "plus" && a.type == TC_STRING && b.type == TC_STRING) {
+        SemanticType result = makeBasic("string");
+        if (a.hasLen && b.hasLen) {
+            result.len    = a.len + b.len;
+            result.hasLen = true;
+        }
+        return result;
+    }
+
     if (op == "plus" || op == "minus" || op == "times") {
         if (!isNumeric(a) || !isNumeric(b)) {
             err = TypeError::NonNumeric;
@@ -187,7 +179,6 @@ SemanticType resultBinary(const string& op, const SemanticType& a,
         return makeBasic("integer");
     }
 
-    // operator tak dikenal -> kembalikan operand kiri
     return a;
 }
 
@@ -200,7 +191,7 @@ SemanticType resultRelational(const SemanticType& a, const SemanticType& b,
     return makeBasic("boolean");
 }
 
-// === Validasi konteks === //
+// validation
 
 void validateRangeBounds(const SemanticType& lo, const SemanticType& hi,
                          bool& realBound, bool& orderBad) {
@@ -212,10 +203,14 @@ void validateRangeBounds(const SemanticType& lo, const SemanticType& hi,
 }
 
 bool validArrayIndex(const SemanticType& idx) {
-    return idx.type != TC_REAL;
+    if (idx.type == TC_NOTYPE) return true;
+    if (idx.type == TC_REAL)   return false;
+    if (idx.type == TC_ARRAY)  return false;
+    if (idx.type == TC_RECORD) return false;
+    return true;
 }
 
-// === Factory === //
+// factory
 
 SemanticType makeBasic(const string& name) {
     SemanticType t;

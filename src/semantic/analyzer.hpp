@@ -5,153 +5,148 @@
 #include "symbol_table.hpp"
 #include "type_check.hpp"
 
-// SemanticType didefinisikan di type_check.hpp (modul aturan tipe).
+// semantic type
 
 class SemanticAnalyzer {
 public:
-    // analyzer semantic
+    // ctor
     SemanticAnalyzer();
 
-    // run analisis
+    // analyze
     void analyze(const NodePtr& root);
 
-    // cek apakah ada error
+    // error check
     bool hasErrors() const { return !errors.empty(); }
 
-    // ambil daftar error
+    // errors
     const vector<string>& getErrors() const { return errors; }
 
-    // akses symbol table (utama ast decorator)
+    // symbol table
     const SymbolTable& getSymbols() const { return symbols; }
 
-    // print parse tree yang sudah dianotasi
+    // print decorated
     void printDecoratedTree(const NodePtr& root, ostream& out) const;
 
-    // dump symbol table
+    // dump
     void printTabDump(ostream& out) const;
 
-    // dump block table
+
     void printBTabDump(ostream& out) const;
 
-    // dump address table
+
     void printATabDump(ostream& out) const;
 
 private:
     SymbolTable symbols;
     vector<string> errors;
 
-    // traversal utama
+    // visit
     SemanticType visit(const NodePtr& node);
 
-    // analisis node program
+    // visit nodes
     SemanticType visitProgram(const NodePtr& node);
-    // analisis header program
+
     SemanticType visitProgramHeader(const NodePtr& node);
-    // analisis bagian deklarasi
+
     SemanticType visitDeclarationPart(const NodePtr& node);
-    // analisis konstanta
     SemanticType visitConstDeclaration(const NodePtr& node);
-    // analisis tipe
+
     SemanticType visitTypeDeclaration(const NodePtr& node);
-    // analisis variabel
     SemanticType visitVarDeclaration(const NodePtr& node);
-    // analisis subprogram
+
     SemanticType visitSubprogramDeclaration(const NodePtr& node);
-    // analisis procedure
+
     SemanticType visitProcedureDeclaration(const NodePtr& node);
-    // analisis function
+
     SemanticType visitFunctionDeclaration(const NodePtr& node);
-    // analisis blok
+
     SemanticType visitBlock(const NodePtr& node, bool pushScope);
-    // analisis compound statement
+
     SemanticType visitCompoundStatement(const NodePtr& node);
-    // analisis daftar statement
+
     SemanticType visitStatementList(const NodePtr& node);
-    // analisis assignment
+
     SemanticType visitAssignmentStatement(const NodePtr& node);
-    // analisis if
+
     SemanticType visitIfStatement(const NodePtr& node);
-    // analisis while
+
     SemanticType visitWhileStatement(const NodePtr& node);
-    // analisis for
     SemanticType visitForStatement(const NodePtr& node);
-    // analisis repeat-until
+
     SemanticType visitRepeatStatement(const NodePtr& node);
-    // analisis pemanggilan procedure/function
+
     SemanticType visitProcedureFunctionCall(const NodePtr& node);
-    // analisis variabel
     SemanticType visitVariable(const NodePtr& node);
-    // analisis field/index variabel
+
     SemanticType visitComponentVariable(const NodePtr& node, SemanticType baseType);
-    // analisis ekspresi
+
     SemanticType visitExpression(const NodePtr& node);
-    // analisis simple expression
+
     SemanticType visitSimpleExpression(const NodePtr& node);
-    // analisis term
+
     SemanticType visitTerm(const NodePtr& node);
-    // analisis factor
+
     SemanticType visitFactor(const NodePtr& node);
-    // analisis konstanta
     SemanticType visitConstant(const NodePtr& node);
-    // analisis node tipe
+
     SemanticType visitTypeNode(const NodePtr& node);
-    // analisis range
+
     SemanticType visitRange(const NodePtr& node);
-    // analisis enumerated type
+
     SemanticType visitEnumerated(const NodePtr& node);
-    // analisis array type
+
     SemanticType visitArrayType(const NodePtr& node);
-    // analisis record type
+
     SemanticType visitRecordType(const NodePtr& node);
-    // analisis formal parameter list
+
     SemanticType visitFormalParameterList(const NodePtr& node);
-    // analisis grup parameter
+
     SemanticType visitParameterGroup(const NodePtr& node);
-    // analisis identifier list
+
     SemanticType visitIdentifierList(const NodePtr& node, const SemanticType& type, const string& obj);
 
-    // cek label token
+    // token check
     static bool isTokenLabel(const string& label, const string& tokenType, string* value = nullptr);
 
-    // ambil nilai token
+    // token value
     static string extractTokenValue(const string& label);
 
-    // ubah tipe jadi nama
+    // type name
     static string typeName(const SemanticType& type);
 
-    // ubah kode tipe jadi nama
+    // type code name
     static string TypeName(int type);
 
-    // bentuk tipe dasar
+    // basic type
     static SemanticType basicType(const string& name);
 
-    // cek numeric
+    // numeric check
     static bool isNumeric(const SemanticType& type);
 
-    // cek boolean
+    // boolean check
     static bool isBoolean(const SemanticType& type);
 
-    // cek tipe sama
+    // same type
     static bool sameType(const SemanticType& lhs, const SemanticType& rhs);
 
-    // cek kompatibilitas assignment
+    // assign compat
     static bool assignmentCompatible(const SemanticType& lhs, const SemanticType& rhs);
 
-    // gabungkan dua operand lewat operator biner + lapor error bila tak cocok
+    // binary op
     SemanticType applyBinary(const string& op, const SemanticType& a, const SemanticType& b);
 
-    // cari tipe berdasarkan nama
+    // lookup type
     SemanticType lookupTypeByName(const string& name) const;
 
-    // simpan error semantic
+    // report error
     void reportError(const string& message);
 
-    // tulis anotasi ke node
+    // annotate
     void annotate(const NodePtr& node, const SemanticType& type, int tabIndex = -1);
 
-    // helper cetak tree
+    // print impl
     void printDecoratedTreeImpl(const NodePtr& node, ostream& out, const string& prefix, bool isLast, bool isRoot) const;
     
-    // label tree yang sudah diberi info
+    // decorated label
     string decoratedLabel(const NodePtr& node) const;
 };

@@ -4,21 +4,19 @@
 #include "../lexical/token_processing.hpp"
 #include "parse_tree.hpp"
 
-// base class semua parser: nyimpen state token + helper umum
-// (tokens, pos, error msg, peek/advance/check/match/consume).
-// subclass cuma fokus ke grammar production.
+// base parser
 class ParserBase {
 public:
     ParserBase() = default;
     explicit ParserBase(const vector<Token>& toks) : tokens(toks) {}
     virtual ~ParserBase() = default;
 
-    // setter & getter umum, dipake utk pos-sync antar parser
+    // pos sync
     void setTokens(const vector<Token>& toks) { tokens = toks; pos = 0; }
     void setPosition(size_t p) { pos = p; }
     size_t getPosition() const { return pos; }
 
-    // error-state API, dibaca Parser utama utk gabungin ke errors[]
+    // error state
     const string& error() const { return errorMessage; }
     bool hasError() const { return !errorMessage.empty(); }
     void clearError() { errorMessage.clear(); }
@@ -28,7 +26,7 @@ protected:
     size_t pos = 0;
     string errorMessage;
 
-    // ---- helper umum buat semua parser ----
+    // helpers
     Token peek(size_t offset = 0) const;          // intip token tanpa maju (eof kalau OOB)
     Token currentToken() const { return peek(0); }// alias buat token skrg
     bool  isAtEnd() const { return pos >= tokens.size(); }
@@ -38,6 +36,6 @@ protected:
     bool  consume(const string& type, const string& ctx); // match atau report error
     NodePtr makeTokenNode(const Token& t) const;  // token -> node ("type" atau "type(value)")
 
-    // virtual: Parser override utk push ke errors[] + cerr
+    // virtual error
     virtual void reportError(const string& message);
 };

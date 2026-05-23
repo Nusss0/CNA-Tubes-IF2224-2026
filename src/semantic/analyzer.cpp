@@ -11,7 +11,7 @@ bool isIdentLabel(const string& label, string& value) {
     return true;
 }
 
-// simbol operator utk pesan error
+// op symbol
 string opSymbol(const string& label) {
     if (label == "plus") return "+";
     if (label == "minus") return "-";
@@ -30,7 +30,7 @@ int lookupCurrentScope(SymbolTable& symbols, const string& id) {
     const auto& btab = symbols.getBtab();
     int blockIdx = display[symbols.currentLevel()];
     int idx = btab[blockIdx].last;
-    //case-insensitive utk konsisten sm SymbolTable::lookup
+    // case-insensitive lookup
     auto eq = [](const string& a, const string& b) {
         if (a.size() != b.size()) return false;
         for (size_t i = 0; i < a.size(); ++i) {
@@ -133,8 +133,10 @@ SemanticType SemanticAnalyzer::lookupTypeByName(const string& name) const {
 
     int idx = symbols.lookup(name);
     if (idx >= 0) {
-        type.type = symbols.getTab()[idx].type;
-        type.name = symbols.getTab()[idx].id;
+        const auto& e = symbols.getTab()[idx];
+        type.type = e.type;
+        type.name = e.id;
+        type.ref  = e.ref; // propagate ref
         return type;
     }
 
@@ -149,7 +151,7 @@ void SemanticAnalyzer::reportError(const string& message) {
 
 void SemanticAnalyzer::annotate(const NodePtr& node, const SemanticType& type, int tabIndex) {
     if (!node) return;
-    // simpan hasil analisis ke node parse tree
+    // annotate node
     node->sem_type = typeName(type);
     node->tab_index = tabIndex;
     node->lev = symbols.currentLevel();
@@ -157,7 +159,7 @@ void SemanticAnalyzer::annotate(const NodePtr& node, const SemanticType& type, i
 }
 
 void SemanticAnalyzer::analyze(const NodePtr& root) {
-    // entry point semantic analysis
+    // analyze
     errors.clear();
     if (!root) {
         reportError("semantic analysis received empty parse tree");
@@ -223,7 +225,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
         SemanticType type;
         if (index >= 0) {
             type.type = symbols.getTab()[index].type;
-            type.name.clear(); // gunakan kode tipe, jangan nama identifier
+            type.name.clear(); // use type code
             annotate(node, type, index);
         } else {
             type.name = value;
@@ -238,7 +240,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
         try {
             int v = stoi(value);
             type.low = type.high = v;
-            type.hasRange = true; // nilai literal -> dipakai utk cek subset range
+            type.hasRange = true; // literal value
         } catch (...) {
         }
         annotate(node, type);
@@ -260,7 +262,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
     if (isTokenLabel(label, "string", &value)) {
         SemanticType type = basicType("string");
         type.len = static_cast<int>(value.size());
-        type.hasLen = true; // panjang literal -> dipakai utk aturan same-length
+        type.hasLen = true; // string length
         annotate(node, type);
         return type;
     }
@@ -272,7 +274,7 @@ SemanticType SemanticAnalyzer::visit(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitProgram(const NodePtr& node) {
-    // proses node program utama
+    // visit program
     for (const auto& child : node->children){
         visit(child);
     }
@@ -282,7 +284,7 @@ SemanticType SemanticAnalyzer::visitProgram(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitProgramHeader(const NodePtr& node) {
-    // daftar nama program dan cek duplicate
+    // program header
     string programName;
     for (const auto& child : node->children) {
         if (isIdentLabel(child->label, programName)) break;
@@ -306,7 +308,7 @@ SemanticType SemanticAnalyzer::visitProgramHeader(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitDeclarationPart(const NodePtr& node) {
-    // read all declaration sebelum blok program
+    // declarations
     for (const auto& child : node->children){
         visit(child);
     }
@@ -316,7 +318,7 @@ SemanticType SemanticAnalyzer::visitDeclarationPart(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitConstDeclaration(const NodePtr& node) {
-    // masukkan konstanta ke symbol table
+    // const decl
     for (const auto& child : node->children) {
         if (child->label == "<const-item>") {
             string name;
@@ -337,7 +339,7 @@ SemanticType SemanticAnalyzer::visitConstDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitTypeDeclaration(const NodePtr& node) {
-    // masukkan tipe baru ke symbol table
+    // type decl
     for (const auto& child : node->children) {
         if (child->label == "<type-item>") {
             string name;
@@ -358,7 +360,7 @@ SemanticType SemanticAnalyzer::visitTypeDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
-    // masukkan variabel ke symbol table
+    // var decl
     for (const auto& child : node->children) {
         if (child->label == "<var-item>") {
             vector<string> names;
@@ -375,7 +377,7 @@ SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
                 }
             }
 
-            //declared.ref dipake utk store btab block (record) atau atab entry (array)
+            // store ref
             for (const auto& name : names) {
                 if (lookupCurrentScope(symbols, name) >= 0) reportError("redeclared variable '" + name + "'");
                 else symbols.enter(name, (int)ObjClass::VARIABLE, declared.type, declared.ref, true, symbols.currentLevel(), 0);
@@ -387,7 +389,7 @@ SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitSubprogramDeclaration(const NodePtr& node) {
-    // proses semua subprogram yang ditemukan
+    // subprograms
     for (const auto& child : node->children){
         visit(child);
     }
@@ -397,7 +399,7 @@ SemanticType SemanticAnalyzer::visitSubprogramDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
-    // analisis procedure & scope parameternya
+    // proc decl
     string name;
     NodePtr formalParams;
     NodePtr blockNode;
@@ -417,14 +419,14 @@ SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
 
     symbols.pushBlock();
     int procBlock = symbols.currentBlock();
-    //link proc tab entry ke btab block-nya biar call site bisa lookup param
+    // link proc block
     if (procIdx >= 0) {
         symbols.setRef(procIdx, procBlock);
     }
     if (formalParams){
         visitFormalParameterList(formalParams);
     }
-    //tandai batas akhir parameter di btab.lpar
+    // mark params
     symbols.markParamBoundary();
 
     if (blockNode){
@@ -438,7 +440,7 @@ SemanticType SemanticAnalyzer::visitProcedureDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
-    // analisis function & tipe baliknya
+    // func decl
     string name;
     string returnTypeName;
     NodePtr formalParams;
@@ -493,7 +495,7 @@ SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitBlock(const NodePtr& node, bool pushScope) {
-    // masuk/keluar scope sesuai konteks blok
+    // block scope
     if (pushScope) symbols.pushBlock();
     for (const auto& child : node->children){
         visit(child);
@@ -505,7 +507,7 @@ SemanticType SemanticAnalyzer::visitBlock(const NodePtr& node, bool pushScope) {
 }
 
 SemanticType SemanticAnalyzer::visitCompoundStatement(const NodePtr& node) {
-    // anggap new block
+    // new block
     return visitBlock(node, true);
 }
 
@@ -517,7 +519,7 @@ SemanticType SemanticAnalyzer::visitStatementList(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitAssignmentStatement(const NodePtr& node) {
-    // cek lhs & rhs
+    // check assign
     SemanticType lhs;
     SemanticType rhs;
     for (const auto& child : node->children) {
@@ -592,28 +594,31 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
         }
     }
 
-    // lookup dan anotasi variabel loop
+    // loop var
     if (!loopVar.empty()) {
         int idx = symbols.lookup(loopVar);
         if (idx < 0) {
             reportError("undeclared loop variable '" + loopVar + "'");
+            // check bounds
+            if (!TypeCheck::isOrdinal(startType) && startType.type != TC_NOTYPE)
+                reportError("for start expression must be ordinal");
+            if (!TypeCheck::isOrdinal(endType) && endType.type != TC_NOTYPE)
+                reportError("for end expression must be ordinal");
         } else {
             SemanticType varType;
             varType.type = symbols.getTab()[idx].type;
             if (loopVarNode) annotate(loopVarNode, varType, idx);
-            // variabel loop harus ordinal (integer/char/boolean/subrange)
-            if (!TypeCheck::isOrdinal(varType) && varType.type != TC_NOTYPE) {
-                reportError("for loop variable '" + loopVar + "' must be ordinal type");
-            }
-        }
-    }
 
-    // batas ekspresi harus ordinal
-    if (!TypeCheck::isOrdinal(startType) && startType.type != TC_NOTYPE) {
-        reportError("for start expression must be ordinal (integer/char/boolean)");
-    }
-    if (!TypeCheck::isOrdinal(endType) && endType.type != TC_NOTYPE) {
-        reportError("for end expression must be ordinal (integer/char/boolean)");
+            // ordinal check
+            if (!TypeCheck::isOrdinal(varType) && varType.type != TC_NOTYPE)
+                reportError("for loop variable '" + loopVar + "' must be ordinal type");
+
+            // compat check
+            if (startType.type != TC_NOTYPE && !TypeCheck::assignmentCompatible(varType, startType))
+                reportError("for start value is not assignment-compatible with loop variable '" + loopVar + "'");
+            if (endType.type != TC_NOTYPE && !TypeCheck::assignmentCompatible(varType, endType))
+                reportError("for end value is not assignment-compatible with loop variable '" + loopVar + "'");
+        }
     }
 
     SemanticType result = basicType("void");
@@ -622,8 +627,7 @@ SemanticType SemanticAnalyzer::visitForStatement(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitRepeatStatement(const NodePtr& node) {
-    // <repeat-statement> ::= repeatsy + <statement-list> + untilsy + <expression>
-    // kunjungi semua child; cek expression (kondisi until) harus boolean
+    // check until
     for (const auto& child : node->children) {
         if (child->label == "<expression>") {
             SemanticType cond = visit(child);
@@ -647,7 +651,7 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
         if (child->label == "<expression>") {
             args.push_back(visit(child));
         } else if (child->label == "<parameter-list>") {
-            //flatten <parameter-list> children -> ambil semua <expression>
+            // flatten args
             for (const auto& pc : child->children) {
                 if (pc->label == "<expression>") args.push_back(visit(pc));
                 else visit(pc);
@@ -666,37 +670,34 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
         result.type = entry.type;
         result.name.clear();
 
-        //skip param check utk predefined (writeln/readln) - mereka variadic
+        // skip predef
         bool isPredef = idx < symbols.predefinedCutoff();
         if (!isPredef && entry.ref > 0) {
-            //ambil formal params dari btab block-nya
+            // get params
             const auto& btab = symbols.getBtab();
             const auto& tab = symbols.getTab();
             int paramBlock = entry.ref;
             int lastParam = btab[paramBlock].lpar;
-            //walk linked-list dari lpar mundur via link
+            // walk params
             vector<int> formalIdxs;
             int cur = lastParam;
             while (cur != 0) {
                 formalIdxs.push_back(cur);
                 cur = tab[cur].link;
             }
-            //chain terbalik (paling akhir di-enter di depan), reverse biar urut deklarasi
-            //tp blocks linked via tab[].link mundur, jadi reverse pakai
-            //utk dapet urutan deklarasi: kita perlu reverse formalIdxs
-            //(actually link punya prev_idx, jadi traversal kita = reverse declaration order)
-            //reverse:
+            // reverse order
+            // reverse
             for (size_t i = 0, j = formalIdxs.size(); i < j / 2; ++i) {
                 int tmp = formalIdxs[i];
                 formalIdxs[i] = formalIdxs[j - 1 - i];
                 formalIdxs[j - 1 - i] = tmp;
             }
-            //arity check
+            // arity check
             if (args.size() != formalIdxs.size()) {
                 reportError("call to '" + name + "': expected " + to_string(formalIdxs.size()) +
                             " argument(s), got " + to_string(args.size()));
             } else {
-                //per-arg type compat
+                // arg types
                 for (size_t i = 0; i < args.size(); ++i) {
                     SemanticType formalT;
                     formalT.type = tab[formalIdxs[i]].type;
@@ -739,7 +740,7 @@ SemanticType SemanticAnalyzer::visitVariable(const NodePtr& node) {
         annotate(node, resolved, idx);
     }
 
-    //walk component chain: setiap [idx] -> element type, setiap .field -> field type
+    // walk components
     for (const auto& comp : components) {
         resolved = visitComponentVariable(comp, resolved);
         currentRef = resolved.ref;
@@ -765,7 +766,7 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
     SemanticType result = baseType;
 
     if (isField && fieldIdent) {
-        //lookup field di record's btab block (baseType.ref menunjuk ke block)
+        // lookup field
         string field = extractTokenValue(fieldIdent->label);
         if (baseType.type != TC_RECORD || baseType.ref <= 0) {
             reportError("field access on non-record type");
@@ -775,7 +776,7 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
             const auto& btab = symbols.getBtab();
             int idx = btab[baseType.ref].last;
             int found = -1;
-            //case-insensitive scan field chain
+            // scan fields
             while (idx != 0) {
                 const string& id = tab[idx].id;
                 bool match = id.size() == field.size();
@@ -796,20 +797,18 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
             }
         }
     } else if (isIndex) {
-        //array indexing: turunkan ke element type
+        // array index
         if (baseType.type != TC_ARRAY) {
             reportError("index access on non-array type");
             result = SemanticType{};
         } else {
-            //TODO: kalau atab support lengkap, ambil element type via baseType.ref -> atab
-            //sementara: turunkan ke integer (asumsi array of integer paling umum)
-            //sebenernya butuh atab[ref].etyp utk akurat
+            // TODO: full atab
             const auto& atab = symbols.getAtab();
             if (baseType.ref > 0 && baseType.ref < (int)atab.size()) {
                 result.type = atab[baseType.ref].etyp;
                 result.ref = atab[baseType.ref].eref;
             } else {
-                //fallback: anggap integer biar ga blok type checking lain
+                // fallback int
                 result.type = TC_INTEGER;
                 result.ref = 0;
             }
@@ -822,10 +821,9 @@ SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, Seman
 }
 
 SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
-    // <expression> ::= <simple-expression> [ relop <simple-expression> ]
     SemanticType left = node->children.empty() ? SemanticType{} : visit(node->children[0]);
     if (node->children.size() >= 3) {
-        if (node->children[1]) visit(node->children[1]); // anotasi operator relasional
+        if (node->children[1]) visit(node->children[1]); // rel op
         SemanticType right = visit(node->children[2]);
 
         TypeCheck::TypeError err;
@@ -844,7 +842,6 @@ SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
-    // <simple-expression> ::= [sign] <term> { (+|-|or) <term> }
     SemanticType acc;
     bool haveAcc = false;
     string pendingOp;
@@ -859,7 +856,7 @@ SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
                 pendingOp.clear();
             }
         } else {
-            // operator biner muncul di antara term; sign di depan diabaikan
+            // bin ops
             if (haveAcc && (child->label == "plus" || child->label == "minus" ||
                             child->label == "orsy")) {
                 pendingOp = child->label;
@@ -873,7 +870,6 @@ SemanticType SemanticAnalyzer::visitSimpleExpression(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitTerm(const NodePtr& node) {
-    // <term> ::= <factor> { (*|/|div|mod|and) <factor> }
     SemanticType acc;
     bool haveAcc = false;
     string pendingOp;
@@ -961,7 +957,7 @@ SemanticType SemanticAnalyzer::visitTypeNode(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
-    // range dipakai untuk subrange / array index
+    // subrange
     SemanticType result = basicType("integer");
     result.name = "subrange";
     result.isSubrange = true;
@@ -981,13 +977,13 @@ SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
             reportError("range lower bound exceeds upper bound");
         }
 
-        // batas basis subrange (best-effort, bila nilai konstan diketahui)
+        // subrange bounds
         if (bounds[0].hasRange && bounds[1].hasRange) {
             result.low = bounds[0].low;
             result.high = bounds[1].high;
             result.hasRange = true;
         }
-        // tipe basis subrange mengikuti tipe constant (integer/char/boolean)
+        // basis type
         int basis = bounds[0].type;
         if (basis == TC_INTEGER || basis == TC_CHAR || basis == TC_BOOLEAN) {
             result.type = basis;
@@ -999,9 +995,7 @@ SemanticType SemanticAnalyzer::visitRange(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
-    // <enumerated> ::= ( ident { , ident } )
-    // Register tiap ident sebagai constant di scope saat ini agar bisa dipakai
-    // sebagai literal nilai (spec hal. 15: enumerated ident jadi nilai).
+    // register enums
     int ordinal = 0;
     for (const auto& child : node->children) {
         string name;
@@ -1015,7 +1009,7 @@ SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
                 ordinal++;
             }
         } else {
-            visit(child); //comma & paren ga relevan
+            visit(child); // punctuation
         }
     }
 
@@ -1026,7 +1020,7 @@ SemanticType SemanticAnalyzer::visitEnumerated(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
-    // analisis tipe array dan elemennya
+    // array type
     SemanticType indexType;
     SemanticType elementType;
     for (const auto& child : node->children) {
@@ -1039,19 +1033,20 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
         }
     }
 
-    if (!TypeCheck::validArrayIndex(indexType)) reportError("array index type cannot be real");
+    if (!TypeCheck::validArrayIndex(indexType))
+        reportError("array index type must be simple type (not Real or structured)");
 
-    // hitung batas dan ukuran array untuk atab
+    // array bounds
     int low  = indexType.hasRange ? indexType.low  : 0;
     int high = indexType.hasRange ? indexType.high : 0;
-    int elsz = 1; // ukuran tiap elemen (unit sederhana)
+    int elsz = 1; // element size
     int size = (high >= low) ? (high - low + 1) * elsz : 0;
 
-    // masukkan ke atab; result.ref menunjuk ke index entri atab
+    // enter atab
     int atabIdx = symbols.enterArray(
-        indexType.type,   // xtyp: tipe indeks
-        elementType.type, // etyp: tipe elemen
-        elementType.ref,  // eref: ref ke tipe elemen jika komposit
+        indexType.type,   // index type
+        elementType.type, // element type
+        elementType.ref,  // element ref
         low, high, elsz, size
     );
 
@@ -1063,11 +1058,11 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
-    //push block utk fields biar lookup field ga clash sm global scope
+    // record scope
     symbols.pushBlock();
     int recordBlock = symbols.currentBlock();
 
-    //iterasi <field-list> -> <field-part>* dan enter setiap field
+    // iterate fields
     for (const auto& child : node->children) {
         if (child->label != "<field-list>") continue;
         for (const auto& fp : child->children) {
@@ -1096,7 +1091,7 @@ SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
     SemanticType result = basicType("record");
     result.type = TC_RECORD;
     result.anonymous = true;
-    result.ref = recordBlock; //pointer ke btab block utk lookup field nanti
+    result.ref = recordBlock; // field block
     annotate(node, result);
     return result;
 }
@@ -1112,7 +1107,7 @@ SemanticType SemanticAnalyzer::visitFormalParameterList(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitParameterGroup(const NodePtr& node) {
-    // 1 grup param deengan tipe sama
+    // param group
     vector<string> names;
     SemanticType paramType;
     for (const auto& child : node->children) {
@@ -1140,7 +1135,7 @@ SemanticType SemanticAnalyzer::visitParameterGroup(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitIdentifierList(const NodePtr& node, const SemanticType& type, const string& obj) {
-    // helper untuk daftar identifier
+    // identifier list
     (void)type;
     (void)obj;
     for (const auto& child : node->children) visit(child);
@@ -1149,7 +1144,7 @@ SemanticType SemanticAnalyzer::visitIdentifierList(const NodePtr& node, const Se
 }
 
 void SemanticAnalyzer::printDecoratedTree(const NodePtr& root, ostream& out) const {
-    // tampilkan parse tree dengan anotasi semantic
+    // print tree
     printDecoratedTreeImpl(root, out, "", true, true);
 }
 
@@ -1173,7 +1168,7 @@ string SemanticAnalyzer::decoratedLabel(const NodePtr& node) const {
 }
 
 void SemanticAnalyzer::printDecoratedTreeImpl(const NodePtr& node, ostream& out, const string& prefix, bool isLast, bool isRoot) const {
-    // cetak tree dengan penanda cabang
+    // print tree
     if (!node) return;
     if (isRoot) out << decoratedLabel(node) << "\n";
     else out << prefix << (isLast ? "└── " : "├── ") << decoratedLabel(node) << "\n";
@@ -1185,16 +1180,16 @@ void SemanticAnalyzer::printDecoratedTreeImpl(const NodePtr& node, ostream& out,
 }
 
 void SemanticAnalyzer::printTabDump(ostream& out) const {
-    // tampilkan isi tab table
+    // dump tab
     symbols.dumpTab(out);
 }
 
 void SemanticAnalyzer::printBTabDump(ostream& out) const {
-    // tampilkan isi block table
+    // dump btab
     symbols.dumpBtab(out);
 }
 
 void SemanticAnalyzer::printATabDump(ostream& out) const {
-    // tampilkan isi address table
+    // dump atab
     symbols.dumpAtab(out);
 }

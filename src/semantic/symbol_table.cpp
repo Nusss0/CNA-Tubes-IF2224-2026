@@ -3,9 +3,7 @@
 #include <iomanip>
 #include <stdexcept>
 
-// == Helper == //
-
-// helper untuk mengambil nama kelas objek
+// helpers
 static const char* objClassName(int obj) {
     switch (static_cast<ObjClass>(obj)) {
         case ObjClass::UNDEFINED: return "undef";
@@ -19,7 +17,7 @@ static const char* objClassName(int obj) {
     }
 }
 
-// helper untuk melakukan print strip
+
 static void printHorizontalRule(ostream& out, const vector<int>& widths) {
     for (size_t i = 0; i < widths.size(); ++i) {
         out << string(widths[i], '-');
@@ -28,9 +26,7 @@ static void printHorizontalRule(ostream& out, const vector<int>& widths) {
     out << '\n';
 }
 
-// == Implementasi Method == //
-
-// konstruktor kelas symtab
+// ctor
 SymbolTable::SymbolTable() {
     tab.reserve(128);
     btab.reserve(32);
@@ -45,15 +41,14 @@ SymbolTable::SymbolTable() {
     btab.push_back({0, 0, 0, 0});
     btab[0].last = static_cast<int>(tab.size()) - 1;
 
-    // dummy atab[0] agar indeks array yang valid mulai dari 1
-    // (ref=0 berarti "tidak ada entri atab", ref>0 berarti indeks nyata)
+    // dummy atab[0]
     atab.push_back({0, 0, 0, 0, 0, 0, 0});
 
     display.push_back(0);
     level = 0;
 }
 
-// implementasi fungsi initReservedWords
+// init reserved
 void SymbolTable::initReservedWords() {
     struct RawReserved {
         const char* name;
@@ -125,7 +120,7 @@ void SymbolTable::initReservedWords() {
 }
 
 
-// implementasi fungsi untuk initPredefined
+// init predefined
 void SymbolTable::initPredefined() {
     /* true */
     {
@@ -152,13 +147,13 @@ void SymbolTable::initPredefined() {
     }
 }
 
-// implementasi method addTabEntry untuk menambahkan entry table
+// add entry
 int SymbolTable::addTabEntry(const TabEntry& entry) {
     tab.push_back(entry);
     return static_cast<int>(tab.size()) - 1;
 }
 
-// menambhakan sebuah identifier baru dengan bantuan implementasi method enter
+// enter
 int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, int lev, int adr) {
     int blockIdx = display[level];
     int prevLast = btab[blockIdx].last;
@@ -175,14 +170,14 @@ int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, i
 
     int idx = addTabEntry(entry);
     btab[blockIdx].last = idx;
-    // hitung vsze: kalo variable, tambah ukuran (simplified: size=1)
+    // track var size
     if (obj == (int)ObjClass::VARIABLE) {
         btab[blockIdx].vsze += 1;
     }
     return idx;
 }
 
-//compare case-insensitive (Pascal: ident ga case-sensitive)
+// case-insensitive
 static bool sameId(const string& a, const string& b) {
     if (a.size() != b.size()) return false;
     for (size_t i = 0; i < a.size(); ++i) {
@@ -191,18 +186,18 @@ static bool sameId(const string& a, const string& b) {
     return true;
 }
 
-// link entry ke btab block (dipake utk proc/func -> param block)
+// link ref
 void SymbolTable::setRef(int tabIdx, int ref) {
     if (tabIdx > 0 && tabIdx < (int)tab.size()) tab[tabIdx].ref = ref;
 }
 
-// tandai bahwa btab.last saat ini adalah parameter terakhir
+// mark params
 void SymbolTable::markParamBoundary() {
     int blockIdx = display[level];
     btab[blockIdx].lpar = btab[blockIdx].last;
 }
 
-// implementasi method lookup untuk mencari first match dari sebuah tab entry
+// lookup
 int SymbolTable::lookup(const string& id) const {
     for (int lev = level; lev >= 0; --lev) {
         int blockIdx = display[lev];
@@ -216,7 +211,7 @@ int SymbolTable::lookup(const string& id) const {
     return -1;
 }
 
-// implementasi enterArray: tambah entry ke atab
+// enter array
 int SymbolTable::enterArray(int xtyp, int etyp, int eref, int low, int high, int elsz, int size) {
     AtabEntry entry;
     entry.xtyp = xtyp;
@@ -230,21 +225,21 @@ int SymbolTable::enterArray(int xtyp, int etyp, int eref, int low, int high, int
     return static_cast<int>(atab.size()) - 1;
 }
 
-// implementasi method pushBlock untuk memasukkan sebuah lexical scope baru
+// push block
 void SymbolTable::pushBlock() {
     btab.push_back({0, 0, 0, 0});
     ++level;
     display.push_back(static_cast<int>(btab.size()) - 1);
 }
 
-// implementasi method popBlock untuk dari display 
+// pop block 
 void SymbolTable::popBlock() {
     if (level <= 0) return;         
     --level;
     display.pop_back();
 }
 
-// implementasi method dumpTab 
+// dump tab 
 void SymbolTable::dumpTab(ostream& out) const {
     out << "\ntab:\n";
 
@@ -262,7 +257,6 @@ void SymbolTable::dumpTab(ostream& out) const {
             << setw(widths[8]) << link << '\n';
     };
 
-    /* header */
     out << setw(widths[0]) << "idx" << ' '
         << setw(widths[1]) << "id" << ' '
         << setw(widths[2]) << "obj" << ' '
@@ -284,7 +278,7 @@ void SymbolTable::dumpTab(ostream& out) const {
     }
 }
 
-// implementasi method dumpBtab
+// dump btab
 void SymbolTable::dumpBtab(ostream& out) const {
     out << "\nbtab:\n";
 
@@ -307,11 +301,11 @@ void SymbolTable::dumpBtab(ostream& out) const {
     }
 }
 
-// implementasi method dumpAtab
+// dump atab
 void SymbolTable::dumpAtab(ostream& out) const {
     out << "\natab:\n";
 
-    // atab[0] adalah dummy placeholder; kosong jika hanya dummy
+    // dummy atab[0]
     if (atab.size() <= 1) {
         out << "(empty)\n";
         return;
@@ -329,7 +323,7 @@ void SymbolTable::dumpAtab(ostream& out) const {
 
     out << string(50, '-') << '\n';
 
-    // mulai dari index 1 (skip dummy di index 0)
+    // skip dummy
     for (size_t i = 1; i < atab.size(); ++i) {
         out << right
             << setw(widths[0]) << i << ' '
@@ -343,7 +337,7 @@ void SymbolTable::dumpAtab(ostream& out) const {
     }
 }
 
-// impelementasi method dumpAll 
+// dump all 
 void SymbolTable::dumpAll(ostream& out) const {
     dumpTab(out);
     dumpBtab(out);

@@ -5,7 +5,7 @@
 
 class AstBuilder {
 public:
-    // entry point: terima root parse tree <program> -> hasil AST ProgramNode
+    // build ast
     AstNodePtr build(const NodePtr& parseRoot);
 
     bool hasError() const { return !errors.empty(); }

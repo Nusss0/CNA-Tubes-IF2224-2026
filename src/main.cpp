@@ -2,7 +2,7 @@
 
 
 int main() {
-   // Choose input mode
+   // input mode
    cout << "[1] Source code file (run lexer + parser)\n";
    cout << "[2] Token file       (skip lexer, run parser only)\n";
    int mode = 0;
@@ -22,7 +22,7 @@ int main() {
    path = "test/" + fileName;
 
 
-   //cek input file ada (pakai ifstream langsung, bukan IsFileExist krn dia nge-prompt override)
+   // check file exist
    {
       ifstream check(path);
       if (!check.good()) {
@@ -34,11 +34,11 @@ int main() {
    vector<Token> tokens;
 
    if (mode == 1) {
-      // Source-code mode: read raw -> tokenize -> print -> optional export
+      // lexer path
       string raw = DFAFileReader(path);
       tokens = Tokenizing(raw);
 
-      // filter token komentar biar parser ga perlu pusing
+      // drop comment tokens
       vector<Token> filtered;
       for (const auto& t : tokens) {
          if (t.type != "comment") filtered.push_back(t);
@@ -75,12 +75,12 @@ int main() {
          }
       }
    } else {
-      // Flexible mode: accept either token file or raw source file.
+      // parser path
       tokens = LoadTokens(path);
       cout << "[INFO] Loaded " << tokens.size() << " tokens from file.\n";
    }
 
-   // ---------------- Syntax Analysis (Recursive Descent) ----------------
+   // syntax
    cout << "\n=== Parse Tree ===\n";
    Parser parser(tokens);
    NodePtr root = parser.parseProgram();
@@ -108,8 +108,8 @@ int main() {
       }
    }
 
-    // ---------------- Semantic Analysis: AST construction ----------------
-    // skip kalau parsing gagal atau ada syntax error
+    // ast build
+    // skip if syntax error
     if (!root || parser.hasError()) {
        if (parser.hasError()) {
           cout << "\n[INFO] Semantic analysis skipped due to syntax error(s).\n";
@@ -144,12 +144,12 @@ int main() {
       }
    }
 
-   // ---------------- Semantic Analysis: type & scope checking ----------------
+   // semantic
    cout << "\n=== Semantic Analysis ===\n";
    SemanticAnalyzer analyzer;
    analyzer.analyze(root);
 
-   // decorate AST pakai symbol table yang udah terisi
+   // decorate ast
    if (ast) {
       AstDecorator decorator(analyzer.getSymbols());
       decorator.decorate(ast);

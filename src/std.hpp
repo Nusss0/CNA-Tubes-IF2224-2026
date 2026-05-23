@@ -1,6 +1,6 @@
 #pragma once
 
-// Standard library
+// std
 #include <string>
 #include <vector>
 #include <map>

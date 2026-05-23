@@ -4,9 +4,7 @@
 #include "ast_node.hpp"
 #include "symbol_table.hpp"
 
-// traversal AST pasca semantic analysis utk mengisi field
-// typeName, tabIndex, lev pada tiap AstNode.
-// membutuhkan symbol table yang sudah terisi penuh.
+// ast decorator
 class AstDecorator {
 public:
     explicit AstDecorator(const SymbolTable& sym);

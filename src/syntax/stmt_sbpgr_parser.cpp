@@ -11,25 +11,25 @@ NodePtr StatementSubprogramParser::parseStatement() {
     if (t.type == "repeatsy")return parseRepeatStatement();
     if (t.type == "forsy")   return parseForStatement();
     if (t.type == "ident") {
-        // ident bisa assignment (x := ...)
+        // assign or call
         Token nxt = peek(1);
         if (nxt.type == "lparent") return parseProcedureFunctionCall();
         if (nxt.type == "becomes" || nxt.type == "lbrack" || nxt.type == "period")
             return parseAssignmentStatement();
         return parseProcedureFunctionCall();
     }
-    // empty statement (sblm ; / END / UNTIL / ELSE / EOF), valid sesuai revisi M3
+    // empty stmt
     if (t.type == "semicolon" || t.type == "endsy" || t.type == "untilsy" || t.type == "elsesy" || isAtEnd()) {
         return makeNode("<empty-statement>");
     }
-    // token bener2 ga dikenali, catat error biar Parser utama tau
+    // unknown token
     if (errorMessage.empty()) errorMessage = "unexpected token at start of statement: " + t.type;
     return nullptr;
 }
 
 NodePtr StatementSubprogramParser::parseAssignmentStatement() {
     NodePtr node = makeNode("<assignment-statement>");
-    // kalau ident sederhana (ga ada [ atau .), langsung ident tanpa <variable>
+    // simple ident
     if (check("ident")) {
         Token nxt = peek(1);
         if (nxt.type != "lbrack" && nxt.type != "period") {
@@ -108,9 +108,9 @@ NodePtr StatementSubprogramParser::parseWhileStatement() {
     addChild(node, parseExpression());
     consume("dosy", "<while-statement>");
     addChild(node, makeNode("dosy"));
-    // revisi M3: body wajib compound-statement, bkn single statement
+    // body compound
     addChild(node, parseCompoundStatement());
-    // semicolon trailing bagian dari produksi <while-statement>
+    // trailing semicolon
     if (match("semicolon")) addChild(node, makeNode("semicolon"));
     else consume("semicolon", "<while-statement>");
     return node;
@@ -151,9 +151,9 @@ NodePtr StatementSubprogramParser::parseForStatement() {
     addChild(node, parseExpression());
     consume("dosy", "<for-statement>");
     addChild(node, makeNode("dosy"));
-    // revisi M3: body wajib compound-statement, bkn single statement
+    // body compound
     addChild(node, parseCompoundStatement());
-    // semicolon trailing bagian dari produksi <for-statement>
+    // trailing semicolon
     if (match("semicolon")) addChild(node, makeNode("semicolon"));
     else consume("semicolon", "<for-statement>");
     return node;
@@ -410,7 +410,7 @@ NodePtr StatementSubprogramParser::parseStatementList() {
         return node;
     }
     while (true) {
-        // while/for udah consume ';' sendiri (revisi M3)
+        // while/for own semicolon
         bool ownsSemicolon = prev && (prev->label == "<while-statement>" || prev->label == "<for-statement>")
                              && !prev->children.empty() && prev->children.back()->label == "semicolon";
         if (!ownsSemicolon) {

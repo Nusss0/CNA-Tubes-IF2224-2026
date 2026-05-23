@@ -1,6 +1,6 @@
 #include "ast_printer.hpp"
 
-// ---- format node sesuai spec M3 ---- //
+// format node
 
 static string formatNode(const AstNodePtr& node);
 
@@ -105,7 +105,7 @@ static string formatNode(const AstNodePtr& node) {
 static string labelOf(const AstNodePtr& node, const string& base = "") {
     if (!node) return "";
     string s = base.empty() ? formatNode(node) : base;
-    // anotasi (cuma muncul kalau udah didekorasi)
+    // annotation
     vector<string> anno;
     if (!node->typeName.empty()) anno.push_back("type:" + node->typeName);
     if (node->tabIndex >= 0)     anno.push_back("tab:" + to_string(node->tabIndex));
@@ -121,7 +121,7 @@ static string labelOf(const AstNodePtr& node, const string& base = "") {
     return s;
 }
 
-// label child khusus sesuai parent kind (spec hal. 23)
+// child label
 static string childLabel(const AstNodePtr& parent, size_t idx, const AstNodePtr& child) {
     if (!parent || !child) return "";
 
@@ -146,7 +146,7 @@ static string childLabel(const AstNodePtr& parent, size_t idx, const AstNodePtr&
     return formatNode(child);
 }
 
-// node yang nggak punya child bermakna — diperlakukan sebagai leaf
+// leaf check
 static bool isLeaf(AstKind k) {
     switch (k) {
         case AstKind::Number:
@@ -186,17 +186,17 @@ static void printAstImpl(const AstNodePtr& node, ostream& out, const string& pre
         childPrefix = prefix + "|   ";
     }
 
-    // tampilkan semua child yang ada
+    // children
     for (size_t i = 0; i < node->children.size(); i++) {
         auto& c = node->children[i];
         if (!c) continue;
         bool lastChild = (i + 1 == node->children.size());
         string clbl = childLabel(node, i, c);
         if (clbl == formatNode(c)) {
-            // nggak ada custom label, pakai default recursive
+            // default label
             printAstImpl(c, out, childPrefix, lastChild, false);
         } else {
-            // pakai custom label
+            // custom label
             printAstImpl(c, out, childPrefix, lastChild, false, clbl);
         }
     }

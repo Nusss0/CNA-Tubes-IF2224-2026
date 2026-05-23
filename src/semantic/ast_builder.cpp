@@ -1,12 +1,12 @@
 #include "ast_builder.hpp"
 
-//---- utilities ----
+// utils
 
 static bool startsWith(const string& s, const string& p) {
     return s.size() >= p.size() && s.compare(0, p.size(), p) == 0;
 }
 
-//extract isi dalam kurung: "ident(foo)" -> "foo", "intcon(5)" -> "5"
+// extract inner
 static string extractInside(const string& label) {
     auto lp = label.find('(');
     auto rp = label.rfind(')');
@@ -19,14 +19,14 @@ static string extractInside(const string& label) {
     return inner;
 }
 
-//ambil token type sebelum '(' atau full label kalau leaf tanpa value
+// leaf type
 static string leafType(const string& label) {
     auto lp = label.find('(');
     if (lp == string::npos) return label;
     return label.substr(0, lp);
 }
 
-//cari child berdasarkan label exact / prefix
+// find child
 static NodePtr findChild(const NodePtr& node, const string& label) {
     if (!node) return nullptr;
     for (auto& c : node->children) {
@@ -35,7 +35,7 @@ static NodePtr findChild(const NodePtr& node, const string& label) {
     return nullptr;
 }
 
-//peta operator token -> simbol AST (utk BinOp.value)
+// op map
 static string opSymbol(const string& tokType) {
     if (tokType == "plus")   return "+";
     if (tokType == "minus")  return "-";
@@ -64,7 +64,7 @@ static bool isOpToken(const string& lbl) {
     return false;
 }
 
-//---- main entry ----
+// entry
 
 AstNodePtr AstBuilder::build(const NodePtr& parseRoot) {
     errors.clear();
@@ -80,11 +80,11 @@ void AstBuilder::reportError(const string& msg) {
     cerr << "[AST ERROR] " << msg << " !\n";
 }
 
-//---- program & declarations ----
+// program & decls
 
 AstNodePtr AstBuilder::buildProgram(const NodePtr& node) {
     auto prog = makeAst(AstKind::Program);
-    //ambil nama program dari <program-header>
+    // program name
     auto header = findChild(node, "<program-header>");
     if (header) {
         for (auto& c : header->children) {
@@ -94,13 +94,13 @@ AstNodePtr AstBuilder::buildProgram(const NodePtr& node) {
             }
         }
     }
-    //declarations -> Block container
+    // declarations
     auto decls = findChild(node, "<declaration-part>");
     if (decls) {
         auto declList = buildDeclarationPart(decls);
         if (declList) addAstChild(prog, declList);
     }
-    //compound -> body Compound
+    // body
     auto compound = findChild(node, "<compound-statement>");
     if (compound) {
         auto body = buildCompoundStatement(compound);
@@ -118,7 +118,7 @@ AstNodePtr AstBuilder::buildDeclarationPart(const NodePtr& node) {
         else if (c->label == "<type-declaration>")  v = buildTypeDeclaration(c);
         else if (c->label == "<subprogram-declaration>") v = buildSubprogram(c);
         if (!v) continue;
-        //flatten: section builder return Block bungkus -> langsung serap child-nya
+        // flatten block
         if (v->kind == AstKind::Block) {
             for (auto& ch : v->children) addAstChild(block, ch);
         } else {
@@ -129,9 +129,7 @@ AstNodePtr AstBuilder::buildDeclarationPart(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildVarDeclaration(const NodePtr& node) {
-    //<var-declaration> = varsy + <var-item>+
-    //<var-item> = <identifier-list> + colon + <type> + semicolon
-    //tiap ident di <identifier-list> diexpand jadi VarDecl sendiri
+    // var decl
     auto group = makeAst(AstKind::Block);
     for (auto& item : node->children) {
         if (item->label != "<var-item>") continue;
@@ -144,13 +142,13 @@ AstNodePtr AstBuilder::buildVarDeclaration(const NodePtr& node) {
             if (!startsWith(id->label, "ident(")) continue;
             auto vd = makeAst(AstKind::VarDecl, extractInside(id->label));
             if (typeAst) {
-                //bungkus copy ringan: share pointer cukup, type ref read-only
+                // share type
                 addAstChild(vd, typeAst);
             }
             addAstChild(group, vd);
         }
     }
-    //flatten kalau cuma 1 child? biarin sbg Block container biar konsisten
+    // block container
     return group;
 }
 
@@ -158,7 +156,7 @@ AstNodePtr AstBuilder::buildConstDeclaration(const NodePtr& node) {
     auto group = makeAst(AstKind::Block);
     for (auto& item : node->children) {
         if (item->label != "<const-item>") continue;
-        //<const-item> = ident + eql + <constant> + semicolon
+        // const decl
         string name;
         AstNodePtr val;
         for (auto& c : item->children) {
@@ -200,7 +198,7 @@ AstNodePtr AstBuilder::buildTypeDeclaration(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildType(const NodePtr& node) {
-    //<type> punya 1 child: ident, <array-type>, <record-type>, <enumerated>, <range>
+    // type
     if (!node || node->children.empty()) return makeAst(AstKind::TypeRef, "unknown");
     auto& c = node->children[0];
     if (startsWith(c->label, "ident(")) {
@@ -208,8 +206,7 @@ AstNodePtr AstBuilder::buildType(const NodePtr& node) {
     }
     if (c->label == "<array-type>") {
         auto arr = makeAst(AstKind::ArrayType);
-        //<array-type> = arraysy + lbrack + (<range>|ident) + rbrack + ofsy + <type>
-        //child[0] = index type, child[1] = element type
+        // array type
         for (auto& ch : c->children) {
             if (ch->label == "<range>") {
                 auto r = makeAst(AstKind::RangeType);
@@ -230,12 +227,12 @@ AstNodePtr AstBuilder::buildType(const NodePtr& node) {
     }
     if (c->label == "<record-type>") {
         auto rec = makeAst(AstKind::RecordType);
-        //<record-type> = recordsy + <field-list> + endsy
+        // record type
         auto fl = findChild(c, "<field-list>");
         if (fl) {
             for (auto& fp : fl->children) {
                 if (fp->label != "<field-part>") continue;
-                //<field-part> = <identifier-list> + colon + <type>
+                // field part
                 auto il = findChild(fp, "<identifier-list>");
                 auto tn = findChild(fp, "<type>");
                 AstNodePtr ftype = tn ? buildType(tn) : nullptr;
@@ -274,7 +271,7 @@ AstNodePtr AstBuilder::buildType(const NodePtr& node) {
 
 AstNodePtr AstBuilder::buildSubprogram(const NodePtr& node) {
     auto sd = makeAst(AstKind::SubprogramDecl);
-    //<subprogram-declaration> bungkus <procedure-declaration> atau <function-declaration>
+    // subprogram
     NodePtr inner = node;
     for (auto& c : node->children) {
         if (c->label == "<procedure-declaration>" || c->label == "<function-declaration>") {
@@ -283,14 +280,14 @@ AstNodePtr AstBuilder::buildSubprogram(const NodePtr& node) {
             break;
         }
     }
-    //ambil nama (ident pertama setelah proceduresy/functionsy)
+    // name
     for (auto& c : inner->children) {
         if (startsWith(c->label, "ident(") && sd->value.empty()) {
             sd->value = extractInside(c->label);
             break;
         }
     }
-    //ambil body kalau ada <block> -> <compound-statement>
+    // body
     for (auto& c : inner->children) {
         if (c->label == "<block>") {
             for (auto& bc : c->children) {
@@ -303,14 +300,14 @@ AstNodePtr AstBuilder::buildSubprogram(const NodePtr& node) {
     return sd;
 }
 
-//---- statements ----
+// statements
 
 AstNodePtr AstBuilder::buildCompoundStatement(const NodePtr& node) {
     auto comp = makeAst(AstKind::Compound);
     auto stmtList = findChild(node, "<statement-list>");
     if (!stmtList) return comp;
     for (auto& s : stmtList->children) {
-        //skip token semicolon murni di list
+        // skip semicolon
         if (s->label == "semicolon") continue;
         auto a = buildStatement(s);
         if (a) addAstChild(comp, a);
@@ -336,7 +333,7 @@ AstNodePtr AstBuilder::buildStatement(const NodePtr& node) {
 
 AstNodePtr AstBuilder::buildAssignment(const NodePtr& node) {
     auto asg = makeAst(AstKind::Assign);
-    //child: ident(...) | <variable> ... becomes <expression>
+    // assign children
     AstNodePtr target, value;
     for (auto& c : node->children) {
         if (c->label == "becomes") continue;
@@ -356,20 +353,20 @@ AstNodePtr AstBuilder::buildAssignment(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildVariable(const NodePtr& node) {
-    //<variable> = ident(name) (<component-variable>)*
+    // variable
     AstNodePtr current;
     for (auto& c : node->children) {
         if (startsWith(c->label, "ident(") && !current) {
             current = makeAst(AstKind::Var, extractInside(c->label));
         } else if (c->label == "<component-variable>") {
-            //bisa [index] atau .field
+            // component
             bool isIndex = false;
             string fieldName;
             AstNodePtr indexExpr;
             for (auto& cc : c->children) {
                 if (cc->label == "lbrack") isIndex = true;
                 else if (cc->label == "<index-list>") {
-                    //ambil child pertama yg literal/ident jadi expr placeholder
+                    // first child
                     if (!cc->children.empty()) {
                         auto& first = cc->children[0];
                         indexExpr = buildFactor(first);
@@ -395,13 +392,13 @@ AstNodePtr AstBuilder::buildVariable(const NodePtr& node) {
     return current;
 }
 
-//---- expressions ----
+// expressions
 
 AstNodePtr AstBuilder::buildExpression(const NodePtr& node) {
-    //<expression> = <simple-expression> [relop <simple-expression>]
+    // expression
     if (!node || node->children.empty()) return nullptr;
     AstNodePtr left = buildSimpleExpression(node->children[0]);
-    //cari relop + right
+    // relop
     for (size_t i = 1; i + 1 < node->children.size(); i++) {
         auto& opNode = node->children[i];
         if (!isOpToken(opNode->label)) continue;
@@ -416,7 +413,7 @@ AstNodePtr AstBuilder::buildExpression(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildSimpleExpression(const NodePtr& node) {
-    //<simple-expression> = [+|-] <term> ( (+|-|or) <term> )*
+    // simple expr
     if (!node || node->children.empty()) return nullptr;
     size_t i = 0;
     bool unaryNeg = false, unaryPos = false;
@@ -433,7 +430,7 @@ AstNodePtr AstBuilder::buildSimpleExpression(const NodePtr& node) {
         addAstChild(u, left);
         left = u;
     } else if (unaryPos && left) {
-        //unary + ga ngubah nilai, tp simpan biar tree explicit
+        // unary +
         auto u = makeAst(AstKind::UnaryOp, "+");
         addAstChild(u, left);
         left = u;
@@ -452,7 +449,7 @@ AstNodePtr AstBuilder::buildSimpleExpression(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildTerm(const NodePtr& node) {
-    //<term> = <factor> ( (*|/|div|mod|and) <factor> )*
+    // term
     if (!node || node->children.empty()) return nullptr;
     AstNodePtr left = buildFactor(node->children[0]);
     size_t i = 1;
@@ -470,8 +467,7 @@ AstNodePtr AstBuilder::buildTerm(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildFactor(const NodePtr& node) {
-    //<factor> wrapper: 1 child = literal | ident | (expr) | not factor | call | variable
-    //jg dipake utk <constant>: ([plus|minus] ident|literal) atau charcon/string langsung
+    // factor
     if (!node) return nullptr;
     if (node->label == "<constant>") {
         //<constant> = [plus|minus] (ident|intcon|realcon) | charcon | string
@@ -490,7 +486,7 @@ AstNodePtr AstBuilder::buildFactor(const NodePtr& node) {
         }
         return inner;
     }
-    //kalau ini bukan wrapper, anggap leaf langsung
+    // leaf
     if (node->children.empty()) {
         const string& lbl = node->label;
         if (startsWith(lbl, "intcon("))   return makeAst(AstKind::Number, extractInside(lbl));
@@ -505,8 +501,7 @@ AstNodePtr AstBuilder::buildFactor(const NodePtr& node) {
         }
         return nullptr;
     }
-    //wrapper case: scan child
-    //handle: literal langsung, ident plain, (expr), not factor, call, variable
+    // wrapper
     AstNodePtr result;
     bool sawNot = false;
     for (size_t i = 0; i < node->children.size(); i++) {
@@ -539,10 +534,10 @@ AstNodePtr AstBuilder::buildFactor(const NodePtr& node) {
     return result;
 }
 
-//---- control flow & calls ----
+// control flow
 
 AstNodePtr AstBuilder::buildIfStatement(const NodePtr& node) {
-    //<if-statement> = ifsy + <expression> + thensy + <stmt> [+ elsesy + <stmt>]
+    // if
     auto ifn = makeAst(AstKind::If);
     AstNodePtr cond, thenS, elseS;
     bool sawElse = false;
@@ -565,7 +560,7 @@ AstNodePtr AstBuilder::buildIfStatement(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildWhileStatement(const NodePtr& node) {
-    //<while-statement> = whilesy + <expression> + dosy + <compound-statement> + semicolon
+    // while
     auto w = makeAst(AstKind::While);
     AstNodePtr cond, body;
     for (auto& c : node->children) {
@@ -578,7 +573,7 @@ AstNodePtr AstBuilder::buildWhileStatement(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildForStatement(const NodePtr& node) {
-    //<for-statement> = forsy + ident + becomes + <expression> + (tosy|downtosy) + <expression> + dosy + <compound-statement> + semicolon
+    // for
     auto f = makeAst(AstKind::For);
     AstNodePtr startE, endE, body;
     string ctrl, dir = "to";
@@ -604,7 +599,7 @@ AstNodePtr AstBuilder::buildForStatement(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildRepeatStatement(const NodePtr& node) {
-    //<repeat-statement> = repeatsy + <statement-list> + untilsy + <expression>
+    // repeat
     auto r = makeAst(AstKind::Repeat);
     AstNodePtr body = makeAst(AstKind::Compound);
     AstNodePtr cond;
@@ -624,14 +619,14 @@ AstNodePtr AstBuilder::buildRepeatStatement(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildCaseStatement(const NodePtr& node) {
-    //<case-statement> = casesy + <expression> + ofsy + <case-block>+ + endsy
+    // case
     auto cs = makeAst(AstKind::Case);
     auto ex = findChild(node, "<expression>");
     if (ex) {
         auto e = buildExpression(ex);
         if (e) addAstChild(cs, e);
     }
-    //tiap <case-block> = <constant> (, <constant>)* : <statement>
+    // case block
     for (auto& c : node->children) {
         if (c->label != "<case-block>") continue;
         auto branch = makeAst(AstKind::Block);
@@ -655,7 +650,7 @@ AstNodePtr AstBuilder::buildCaseStatement(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildProcFuncCall(const NodePtr& node) {
-    //<procedure/function-call> = ident [(lparent (<parameter-list>|<expression>...) rparent)]
+    // call
     auto call = makeAst(AstKind::ProcCall);
     for (auto& c : node->children) {
         const string& l = c->label;

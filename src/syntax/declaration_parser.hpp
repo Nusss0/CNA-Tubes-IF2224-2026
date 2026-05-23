@@ -5,19 +5,16 @@
 #include "../lexical/token_processing.hpp"
 #include "parser_base.hpp"
 
-// parser untuk const/type/var declaration & program-header.
-// helper token diturunkan dari ParserBase. method2 utama di-public-kan
-// supaya bisa dipanggil dari Parser utama / StatementSubprogramParser
-// dgn pola pos-sync.
+// decl parser
 class DeclarationParser : public ParserBase {
 public:
     DeclarationParser() = default;
     explicit DeclarationParser(const vector<Token>& tokens) : ParserBase(tokens) {}
 
-    // parse seluruh const/type/var section secara urut
+    // sections
     NodePtr parseDeclarationPart();
 
-    // dipanggil per-section dari Parser utama atau StmtParser
+    // per-section
     NodePtr parseConstDeclaration();
     NodePtr parseTypeDeclaration();
     NodePtr parseVarDeclaration();
@@ -26,15 +23,13 @@ public:
     NodePtr parseArrayType();
 
 private:
-    // override base: charcon/string dikutip pake single-quote
+    // quote char/string
     NodePtr makeTokenNode(const Token& token) const;
 
-    // helper error legacy: "Syntax error: unexpected token X(value), expected Y"
+    // legacy error fmt
     void setError(const string& expected, const Token& found);
 
-    // cek apakah token bisa mulai constant (ident/intcon/realcon/charcon/string/+/-)
     bool isConstantStart(size_t offset = 0) const;
-    // cek apakah ada pola constant '..' di posisi (curr+offset)
     bool isRangeAhead(size_t offset = 0) const;
 
     NodePtr parseProgramHeader();

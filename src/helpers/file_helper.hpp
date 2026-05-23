@@ -1,16 +1,16 @@
 #pragma once
 
 #include "../std.hpp"
-// Forward declaration to avoid circular include with token_processing
+// fwd decl
 struct Token;
 
-//Read everything from file and return it into one single line string.
+// read file
 string DFAFileReader(const string fileName);
 
-// Reconstruct vector<Token> from a token file produced by PrintTokenToFile.
+// load tokens
 vector<Token> TokenFileReader(const string& path);
 
-// Load tokens from token file format or raw source file format.
+// auto-detect format
 vector<Token> LoadTokens(const string& path);
 
 void TokenPrinter(const vector<Token> &tokens);

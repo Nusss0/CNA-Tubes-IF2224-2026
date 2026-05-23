@@ -1,9 +1,9 @@
 #pragma once
 
-// STL
+// std
 #include "std.hpp"
 
-// User headers
+// headers
 #include "helpers/file_helper.hpp"
 #include "lexical/token_processing.hpp"
 #include "syntax/parser.hpp"
