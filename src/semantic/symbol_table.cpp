@@ -195,6 +195,7 @@ void SymbolTable::setRef(int tabIdx, int ref) {
 void SymbolTable::markParamBoundary() {
     int blockIdx = display[level];
     btab[blockIdx].lpar = btab[blockIdx].last;
+    btab[blockIdx].psze = btab[blockIdx].vsze;
 }
 
 // lookup

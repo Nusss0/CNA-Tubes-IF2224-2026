@@ -1058,7 +1058,7 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
-    // record scope
+    int savedLevel = symbols.currentLevel();
     symbols.pushBlock();
     int recordBlock = symbols.currentBlock();
 
@@ -1081,7 +1081,7 @@ SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
             }
             for (const auto& fn : fieldNames) {
                 if (lookupCurrentScope(symbols, fn) >= 0) reportError("redeclared field '" + fn + "'");
-                else symbols.enter(fn, (int)ObjClass::VARIABLE, fieldType.type, fieldType.ref, true, symbols.currentLevel(), 0);
+                else symbols.enter(fn, (int)ObjClass::VARIABLE, fieldType.type, fieldType.ref, true, savedLevel, 0);
             }
         }
     }
