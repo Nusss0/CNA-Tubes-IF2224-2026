@@ -21,6 +21,9 @@ public:
     // ambil daftar error
     const vector<string>& getErrors() const { return errors; }
 
+    // akses symbol table (utama ast decorator)
+    const SymbolTable& getSymbols() const { return symbols; }
+
     // print parse tree yang sudah dianotasi
     void printDecoratedTree(const NodePtr& root, ostream& out) const;
 

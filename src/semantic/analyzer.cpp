@@ -374,6 +374,7 @@ SemanticType SemanticAnalyzer::visitVarDeclaration(const NodePtr& node) {
                 }
             }
 
+            //declared.ref dipake utk store btab block (record) atau atab entry (array)
             for (const auto& name : names) {
                 if (lookupCurrentScope(symbols, name) >= 0) reportError("redeclared variable '" + name + "'");
                 else symbols.enter(name, (int)ObjClass::VARIABLE, declared.type, declared.ref, true, symbols.currentLevel(), 0);
@@ -435,8 +436,13 @@ SemanticType SemanticAnalyzer::visitFunctionDeclaration(const NodePtr& node) {
     NodePtr blockNode;
     bool afterColon = false;
     for (const auto& child : node->children) {
-        if (isIdentLabel(child->label, name)) {
-            if (afterColon && returnTypeName.empty()) returnTypeName = name;
+        string identVal;
+        if (isIdentLabel(child->label, identVal)) {
+            if (afterColon) {
+                if (returnTypeName.empty()) returnTypeName = identVal;
+            } else if (name.empty()) {
+                name = identVal;
+            }
             continue;
         }
 
@@ -618,52 +624,106 @@ SemanticType SemanticAnalyzer::visitProcedureFunctionCall(const NodePtr& node) {
 
 SemanticType SemanticAnalyzer::visitVariable(const NodePtr& node) {
     string name;
-    NodePtr component;
+    vector<NodePtr> components;
     for (const auto& child : node->children) {
         if (isIdentLabel(child->label, name)) continue;
-        if (child->label == "<component-variable>") component = child;
+        if (child->label == "<component-variable>") components.push_back(child);
     }
 
     int idx = name.empty() ? -1 : symbols.lookup(name);
     SemanticType resolved;
+    int currentRef = 0;
     if (idx < 0) {
         reportError("undeclared identifier '" + name + "'");
     } else {
-        resolved.type = symbols.getTab()[idx].type;
-        resolved.name.clear(); // variabel: tunjukkan tipe, bukan nama variabel
+        const auto& e = symbols.getTab()[idx];
+        resolved.type = e.type;
+        resolved.ref = e.ref;
+        resolved.name.clear();
+        currentRef = e.ref;
         annotate(node, resolved, idx);
     }
 
-    if (component) {
-        resolved = visitComponentVariable(component, resolved);
-        annotate(node, resolved, idx);
+    //walk component chain: setiap [idx] -> element type, setiap .field -> field type
+    for (const auto& comp : components) {
+        resolved = visitComponentVariable(comp, resolved);
+        currentRef = resolved.ref;
     }
+    (void)currentRef;
 
     if (idx < 0) annotate(node, resolved);
+    else annotate(node, resolved, idx);
     return resolved;
 }
 
 SemanticType SemanticAnalyzer::visitComponentVariable(const NodePtr& node, SemanticType baseType) {
+    bool isIndex = false;
+    bool isField = false;
+    NodePtr fieldIdent;
     for (const auto& child : node->children) {
-        if (child->label == "<index-list>") {
-            visit(child);
-        } else if (child->label.rfind("ident(", 0) == 0) {
-            string field = extractTokenValue(child->label);
-            int idx = symbols.lookup(field);
-            if (idx < 0){
-                reportError("undeclared field '" + field + "'");
-            } else {
-                SemanticType ftype;
-                ftype.type = symbols.getTab()[idx].type;
-                ftype.name.clear();
-                annotate(child, ftype, idx);
-            }
+        if (child->label == "lbrack") isIndex = true;
+        else if (child->label == "period") isField = true;
+        else if (child->label == "<index-list>") visit(child);
+        else if (child->label.rfind("ident(", 0) == 0 && isField) fieldIdent = child;
+    }
+
+    SemanticType result = baseType;
+
+    if (isField && fieldIdent) {
+        //lookup field di record's btab block (baseType.ref menunjuk ke block)
+        string field = extractTokenValue(fieldIdent->label);
+        if (baseType.type != TC_RECORD || baseType.ref <= 0) {
+            reportError("field access on non-record type");
+            result = SemanticType{};
         } else {
-            visit(child);
+            const auto& tab = symbols.getTab();
+            const auto& btab = symbols.getBtab();
+            int idx = btab[baseType.ref].last;
+            int found = -1;
+            //case-insensitive scan field chain
+            while (idx != 0) {
+                const string& id = tab[idx].id;
+                bool match = id.size() == field.size();
+                for (size_t i = 0; match && i < id.size(); ++i) {
+                    if (tolower(static_cast<unsigned char>(id[i])) != tolower(static_cast<unsigned char>(field[i]))) match = false;
+                }
+                if (match) { found = idx; break; }
+                idx = tab[idx].link;
+            }
+            if (found < 0) {
+                reportError("undeclared field '" + field + "'");
+                result = SemanticType{};
+            } else {
+                result.type = tab[found].type;
+                result.ref = tab[found].ref;
+                result.name.clear();
+                annotate(fieldIdent, result, found);
+            }
+        }
+    } else if (isIndex) {
+        //array indexing: turunkan ke element type
+        if (baseType.type != TC_ARRAY) {
+            reportError("index access on non-array type");
+            result = SemanticType{};
+        } else {
+            //TODO: kalau atab support lengkap, ambil element type via baseType.ref -> atab
+            //sementara: turunkan ke integer (asumsi array of integer paling umum)
+            //sebenernya butuh atab[ref].etyp utk akurat
+            const auto& atab = symbols.getAtab();
+            if (baseType.ref > 0 && baseType.ref < (int)atab.size()) {
+                result.type = atab[baseType.ref].etyp;
+                result.ref = atab[baseType.ref].eref;
+            } else {
+                //fallback: anggap integer biar ga blok type checking lain
+                result.type = TC_INTEGER;
+                result.ref = 0;
+            }
+            result.name.clear();
         }
     }
-    annotate(node, baseType);
-    return baseType;
+
+    annotate(node, result);
+    return result;
 }
 
 SemanticType SemanticAnalyzer::visitExpression(const NodePtr& node) {
@@ -893,13 +953,40 @@ SemanticType SemanticAnalyzer::visitArrayType(const NodePtr& node) {
 }
 
 SemanticType SemanticAnalyzer::visitRecordType(const NodePtr& node) {
-    for (const auto& child : node->children){
-        visit(child);
+    //push block utk fields biar lookup field ga clash sm global scope
+    symbols.pushBlock();
+    int recordBlock = symbols.currentBlock();
+
+    //iterasi <field-list> -> <field-part>* dan enter setiap field
+    for (const auto& child : node->children) {
+        if (child->label != "<field-list>") continue;
+        for (const auto& fp : child->children) {
+            if (fp->label != "<field-part>") continue;
+            vector<string> fieldNames;
+            SemanticType fieldType;
+            for (const auto& fc : fp->children) {
+                if (fc->label == "<identifier-list>") {
+                    for (const auto& id : fc->children) {
+                        string n;
+                        if (isIdentLabel(id->label, n)) fieldNames.push_back(n);
+                    }
+                } else if (fc->label == "<type>") {
+                    fieldType = visitTypeNode(fc);
+                }
+            }
+            for (const auto& fn : fieldNames) {
+                if (lookupCurrentScope(symbols, fn) >= 0) reportError("redeclared field '" + fn + "'");
+                else symbols.enter(fn, (int)ObjClass::VARIABLE, fieldType.type, fieldType.ref, true, symbols.currentLevel(), 0);
+            }
+        }
     }
+
+    symbols.popBlock();
 
     SemanticType result = basicType("record");
     result.type = TC_RECORD;
     result.anonymous = true;
+    result.ref = recordBlock; //pointer ke btab block utk lookup field nanti
     annotate(node, result);
     return result;
 }

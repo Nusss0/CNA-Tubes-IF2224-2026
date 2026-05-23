@@ -40,6 +40,7 @@ SymbolTable::SymbolTable() {
 
     initReservedWords();
     initPredefined();
+    predefinedEnd = static_cast<int>(tab.size());
 
     btab.push_back({0, 0, 0, 0});
     btab[0].last = static_cast<int>(tab.size()) - 1;
@@ -169,7 +170,11 @@ int SymbolTable::enter(const string& id, int obj, int type, int ref, bool nrm, i
     entry.adr = adr;
 
     int idx = addTabEntry(entry);
-    btab[blockIdx].last = idx;          
+    btab[blockIdx].last = idx;
+    // hitung vsze: kalo variable, tambah ukuran (simplified: size=1)
+    if (obj == (int)ObjClass::VARIABLE) {
+        btab[blockIdx].vsze += 1;
+    }
     return idx;
 }
 

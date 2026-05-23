@@ -273,12 +273,31 @@ AstNodePtr AstBuilder::buildType(const NodePtr& node) {
 }
 
 AstNodePtr AstBuilder::buildSubprogram(const NodePtr& node) {
-    //<subprogram-declaration> handle nanti waktu Daniel & Michael butuh
-    //placeholder: bungkus dgn kind SubprogramDecl + nama dari ident pertama
     auto sd = makeAst(AstKind::SubprogramDecl);
+    //<subprogram-declaration> bungkus <procedure-declaration> atau <function-declaration>
+    NodePtr inner = node;
     for (auto& c : node->children) {
+        if (c->label == "<procedure-declaration>" || c->label == "<function-declaration>") {
+            inner = c;
+            sd->extra = (c->label == "<procedure-declaration>") ? "procedure" : "function";
+            break;
+        }
+    }
+    //ambil nama (ident pertama setelah proceduresy/functionsy)
+    for (auto& c : inner->children) {
         if (startsWith(c->label, "ident(") && sd->value.empty()) {
             sd->value = extractInside(c->label);
+            break;
+        }
+    }
+    //ambil body kalau ada <block> -> <compound-statement>
+    for (auto& c : inner->children) {
+        if (c->label == "<block>") {
+            for (auto& bc : c->children) {
+                if (bc->label == "<compound-statement>") {
+                    addAstChild(sd, buildCompoundStatement(bc));
+                }
+            }
         }
     }
     return sd;

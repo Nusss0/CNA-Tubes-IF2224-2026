@@ -43,10 +43,12 @@ using AstNodePtr = shared_ptr<AstNode>;
 struct AstNode {
     AstKind kind;
 
-    //semantic 
-    string typeName;   // hasil inferensi tipe 
+    //semantic
+    string typeName;   // hasil inferensi tipe
     int tabIndex = -1; // referensi ke entry symbol table
     int lev = -1;      // lexical level
+    int blockIndex = -1; // referensi ke entry btab (utk Compound block)
+    bool predefined = false; // true utk predefined identifier (writeln/readln/dll)
 
     // payload string
     string value;

@@ -12,3 +12,4 @@
 #include "semantic/analyzer.hpp"
 #include "semantic/ast_builder.hpp"
 #include "semantic/ast_printer.hpp"
+#include "semantic/ast_decorator.hpp"

@@ -93,6 +93,9 @@ class SymbolTable {
         int currentLevel() const { return level; }
         int currentBlock() const { return display[level]; }
 
+        // jumlah entry awal (reserved + predefined) -> dipake utk detect predefined ident
+        int predefinedCutoff() const { return predefinedEnd; }
+
         // getter untuk Tab, Btab, Atab, dan Display
         const vector<TabEntry>& getTab() const { return tab; }
         const vector<BtabEntry>& getBtab() const { return btab; }
@@ -109,8 +112,9 @@ class SymbolTable {
         vector<TabEntry> tab;
         vector<BtabEntry> btab;
         vector<AtabEntry> atab;
-        vector<int> display;   
-        int level;     
+        vector<int> display;
+        int level;
+        int predefinedEnd = 0; //index terakhir + 1 utk reserved+predefined entries
 
         // membuat entry table baru
         int addTabEntry(const TabEntry& entry);

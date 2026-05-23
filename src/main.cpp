@@ -143,8 +143,14 @@ int main() {
    cout << "\n=== Semantic Analysis ===\n";
    SemanticAnalyzer analyzer;
    analyzer.analyze(root);
-   cout << "\n--- Decorated Tree ---\n";
-   analyzer.printDecoratedTree(root, cout);
+
+   // decorate AST pakai symbol table yang udah terisi
+   if (ast) {
+      AstDecorator decorator(analyzer.getSymbols());
+      decorator.decorate(ast);
+      cout << "\n--- Decorated AST ---\n";
+      printAst(ast);
+   }
 
    cout << "\n--- Symbol Table (tab) ---\n";
    analyzer.printTabDump(cout);
