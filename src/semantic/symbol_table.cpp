@@ -334,7 +334,7 @@ void SymbolTable::dumpAtab(ostream& out) const {
         << setw(widths[6]) << "elsz" << ' '
         << setw(widths[7]) << "size" << '\n';
 
-    out << string(50, '-') << '\n';
+    out << string(52, '-') << '\n';
 
     // skip dummy
     for (size_t i = 1; i < atab.size(); ++i) {
