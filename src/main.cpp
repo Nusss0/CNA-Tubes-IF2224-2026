@@ -173,4 +173,12 @@ int main() {
    } else {
       cout << "\n[INFO] Semantic analysis finished successfully.\n";
    }
+
+   // generate TAC (three-address code) for control flow
+   if (!analyzer.hasErrors() && ast) {
+       cout << "\n=== Three-Address Code (TAC) ===\n";
+       TacGenerator tac;
+       tac.generate(ast);
+       tac.print(cout);
+   }
 }
