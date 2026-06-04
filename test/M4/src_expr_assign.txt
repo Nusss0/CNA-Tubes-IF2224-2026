@@ -1,8 +1,6 @@
 program ExprAssign;
-
 var
   a, b, c: integer;
-
 begin
   a := 6 + 4;
   b := (a - 2) * 3;

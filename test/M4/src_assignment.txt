@@ -1,0 +1,9 @@
+program SimpleAssign;
+var
+  n: integer;
+begin
+  n := 10;
+  writeln(n);
+  n := 99;
+  writeln(n);
+end.

@@ -1,0 +1,10 @@
+program NestedExpr;
+var
+  a, b, c, d, x: integer;
+begin
+  a := 3;  b := 4;
+  c := 10; d := 2;
+  x := (a + b) * (c - d);
+  writeln(x);
+  writeln(c mod d);
+end.
