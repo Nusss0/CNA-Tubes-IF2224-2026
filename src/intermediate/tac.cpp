@@ -84,6 +84,7 @@ int TacGenerator::addrOf(const AstNodePtr& varNode) const {
 // ---------------------------------------------------------------------------
 void TacGenerator::generate(const AstNodePtr& root) {
     code.clear();
+    errors.clear();
     labelCounter = 0;
     nextAddr = 3;
     addrMap.clear();
@@ -148,16 +149,18 @@ void TacGenerator::resolveLabels() {
 }
 
 // ---------------------------------------------------------------------------
-// printing: "<line> <OP> <lev> <operand>"   (matches interpreter + samples)
+// printing: "<line> <OP> <lev> <operand>"   (0-based line numbers, sesuai spek:
+// "0 INT 0 5", "1 LIT 0 10", ...). Target jump dicetak 0-based pula agar
+// konsisten; eksekusi internal tetap memakai nomor 1-based (lihat resolveJump).
 // ---------------------------------------------------------------------------
 void TacGenerator::print(ostream& out) const {
-    int instrNo = 1;
+    int instrNo = 0;
     for (const auto& instr : code) {
         if (instr.op == "LABEL") continue;  // labels resolved to line numbers, not printed
 
         out << instrNo << " ";
         if (instr.op == "JMP" || instr.op == "JPC") {
-            out << instr.op << " 0 " << instr.target;
+            out << instr.op << " 0 " << (instr.target - 1);  // 1-based -> 0-based display
         } else {
             out << instr.op;
             for (const auto& a : instr.args) out << " " << a;
@@ -242,8 +245,10 @@ void TacGenerator::genExpr(const AstNodePtr& node) {
             genExpr(node->children[0]);
             if (node->value == "-") {
                 emit("OPR", {"0", "1"});      // NEG
+            } else if (node->value == "not") {
+                // "not" tak punya opcode di set instruksi M4
+                errors.push_back("[ERROR] operator 'not' has no opcode in the M4 instruction set !");
             }
-            // TODO: "not" has no opcode in the M4 spec set.
             break;
         }
 
@@ -252,7 +257,13 @@ void TacGenerator::genExpr(const AstNodePtr& node) {
             genExpr(node->children[0]);        // left pushed first
             genExpr(node->children[1]);        // right pushed second
             int code = oprCode(node->value);
-            if (code >= 0) emit("OPR", {"0", to_string(code)});
+            if (code >= 0) {
+                emit("OPR", {"0", to_string(code)});
+            } else {
+                // operator tanpa opcode di set instruksi M4 (mis. and/or)
+                errors.push_back("[ERROR] operator '" + node->value
+                    + "' has no opcode in the M4 instruction set !");
+            }
             break;
         }
 

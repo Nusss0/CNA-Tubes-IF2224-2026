@@ -145,6 +145,12 @@ void SymbolTable::initPredefined() {
         int prev = static_cast<int>(tab.size()) - 1;
         tab.push_back({"writeln", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
     }
+
+    /* write (tanpa newline) — OPR WRT (13) di spek */
+    {
+        int prev = static_cast<int>(tab.size()) - 1;
+        tab.push_back({"write", prev, (int)ObjClass::PROCEDURE, TC_NOTYPE, 0, true, 0, 0});
+    }
 }
 
 // add entry

@@ -182,6 +182,17 @@ int main() {
    generator.generate(ast);
    generator.print(cout);
 
+   // batalkan eksekusi kalau generator menemukan konstruksi tak didukung
+   if (generator.hasErrors()) {
+      cout << "\n[INFO] Code generation finished with "
+           << generator.getErrors().size() << " error(s):\n";
+      for (const auto& err : generator.getErrors()) {
+         cout << "  " << err << "\n";
+      }
+      cout << "\n[INFO] Execution skipped due to code generation error(s).\n";
+      return 0;
+   }
+
    // execution: jalankan TAC di stack machine, cetak output program
    cout << "\n=== Program Output ===\n";
    Interpreter interpreter;
