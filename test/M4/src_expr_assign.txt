@@ -1,0 +1,15 @@
+program ExprAssign;
+
+var
+  a, b, c: integer;
+
+begin
+  a := 6 + 4;
+  b := (a - 2) * 3;
+  c := b div 5;
+  writeln(a);
+  writeln(b);
+  writeln(c);
+  writeln(a = 10);
+  writeln(b > c);
+end.
