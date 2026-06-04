@@ -17,6 +17,9 @@ enum class RuntimeErrorKind {
     INVALID_JUMP,
     INVALID_MEMORY,
     INVALID_OPERAND,
+    STACK_CORRUPTION,
+    STACK_SMASHING,
+    TYPE_MISMATCH,
     NUMERIC_OVERFLOW,
     NUMERIC_UNDERFLOW,
     INDEX_OUT_OF_BOUNDS,
@@ -43,6 +46,9 @@ std::string kindName(RuntimeErrorKind kind);
 [[noreturn]] void invalidJumpTarget(int target, int programSize);
 [[noreturn]] void invalidMemoryAccess(int address, int bp, int stackSize);
 [[noreturn]] void invalidOperand(const std::string& op, const std::string& detail);
+[[noreturn]] void stackCorruption(const std::string& detail, int expected, int actual);
+[[noreturn]] void stackSmashing(int expectedRa, int actualRa);
+[[noreturn]] void typeMismatch(const std::string& op, const std::string& expected, const std::string& got);
 [[noreturn]] void numericOverflow(const std::string& op);
 [[noreturn]] void numericUnderflow(const std::string& op);
 [[noreturn]] void indexOutOfBounds(int index, int length);

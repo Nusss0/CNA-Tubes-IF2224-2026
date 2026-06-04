@@ -12,6 +12,9 @@ string kindName(RuntimeErrorKind kind) {
         case RuntimeErrorKind::INVALID_JUMP:       return "InvalidJumpError";
         case RuntimeErrorKind::INVALID_MEMORY:     return "InvalidMemoryAccessError";
         case RuntimeErrorKind::INVALID_OPERAND:    return "InvalidOperandError";
+        case RuntimeErrorKind::STACK_CORRUPTION:   return "StackCorruptionError";
+        case RuntimeErrorKind::STACK_SMASHING:     return "StackSmashingError";
+        case RuntimeErrorKind::TYPE_MISMATCH:      return "TypeMismatchError";
         case RuntimeErrorKind::NUMERIC_OVERFLOW:   return "OverflowError";
         case RuntimeErrorKind::NUMERIC_UNDERFLOW:  return "UnderflowError";
         case RuntimeErrorKind::INDEX_OUT_OF_BOUNDS:return "IndexOutOfBoundsError";
@@ -56,6 +59,23 @@ void invalidMemoryAccess(int address, int bp, int stackSize) {
 
 void invalidOperand(const string& op, const string& detail) {
     die(RuntimeErrorKind::INVALID_OPERAND, "'" + op + "': " + detail);
+}
+
+void stackCorruption(const string& detail, int expected, int actual) {
+    die(RuntimeErrorKind::STACK_CORRUPTION,
+        detail + " (expected stack size " + to_string(expected)
+        + " but got " + to_string(actual) + ")");
+}
+
+void stackSmashing(int expectedRa, int actualRa) {
+    die(RuntimeErrorKind::STACK_SMASHING,
+        "frame canary overwritten; return address corrupted (expected "
+        + to_string(expectedRa) + " but got " + to_string(actualRa) + ")");
+}
+
+void typeMismatch(const string& op, const string& expected, const string& got) {
+    die(RuntimeErrorKind::TYPE_MISMATCH,
+        "'" + op + "' expected " + expected + " operand but got " + got);
 }
 
 void numericOverflow(const string& op) {

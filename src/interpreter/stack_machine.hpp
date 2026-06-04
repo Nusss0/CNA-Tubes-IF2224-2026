@@ -68,6 +68,10 @@ private:
     static long long   asInteger(const RuntimeValue& v);
     static double      asReal(const RuntimeValue& v);
     static bool        isNumber(const RuntimeValue& v);
+    static std::string valueKindName(const RuntimeValue& v);
+
+    // runtime type checking: pastikan operand bertipe numerik, jika tidak → TypeMismatch
+    static void        requireNumeric(const std::string& op, const RuntimeValue& v);
 
     // operasi integer dengan deteksi overflow/underflow
     static long long   addChecked(long long a, long long b, const std::string& op);

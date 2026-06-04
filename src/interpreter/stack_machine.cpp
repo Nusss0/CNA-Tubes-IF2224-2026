@@ -139,6 +139,14 @@ void StackMachine::execINT(const RuntimeInstruction& instr) {
     }
 
     context.bp = static_cast<int>(bpIndex);
+
+    // catat guard frame: posisi top yg benar saat keluar + canary return address
+    FrameGuard guard;
+    guard.basePtr = context.bp;
+    guard.expectedTop = static_cast<int>(context.stack.size());  // bp + size
+    guard.canaryRa = context.ra;
+    context.frames.push_back(guard);
+
     context.ip++;
 }
 
@@ -306,7 +314,7 @@ void StackMachine::execOPR_neg() {
     } else if (a.kind == RuntimeValue::Kind::REAL) {
         push(RuntimeValue::real(-a.realVal));
     } else {
-        RuntimeErrorHook::invalidOperand("NEG", "non-numeric operand");
+        RuntimeErrorHook::typeMismatch("NEG", "numeric", valueKindName(a));
     }
 }
 
@@ -340,6 +348,7 @@ void StackMachine::execOPR_sub() {
     if (!hasValues(2)) RuntimeErrorHook::stackUnderflow("SUB", context.stack.size(), 2);
     RuntimeValue b = pop();
     RuntimeValue a = pop();
+    requireNumeric("SUB", a); requireNumeric("SUB", b);
     if (a.kind == RuntimeValue::Kind::REAL || b.kind == RuntimeValue::Kind::REAL)
         push(RuntimeValue::real(asReal(a) - asReal(b)));
     else
@@ -350,6 +359,7 @@ void StackMachine::execOPR_mul() {
     if (!hasValues(2)) RuntimeErrorHook::stackUnderflow("MUL", context.stack.size(), 2);
     RuntimeValue b = pop();
     RuntimeValue a = pop();
+    requireNumeric("MUL", a); requireNumeric("MUL", b);
     if (a.kind == RuntimeValue::Kind::REAL || b.kind == RuntimeValue::Kind::REAL)
         push(RuntimeValue::real(asReal(a) * asReal(b)));
     else
@@ -360,6 +370,7 @@ void StackMachine::execOPR_div() {
     if (!hasValues(2)) RuntimeErrorHook::stackUnderflow("DIV", context.stack.size(), 2);
     RuntimeValue b = pop();
     RuntimeValue a = pop();
+    requireNumeric("DIV", a); requireNumeric("DIV", b);
     double divisor = asReal(b);
     if (divisor == 0.0) RuntimeErrorHook::divisionByZero();
     // Arion div returns integer if both operands are integer
@@ -373,6 +384,7 @@ void StackMachine::execOPR_mod() {
     if (!hasValues(2)) RuntimeErrorHook::stackUnderflow("MOD", context.stack.size(), 2);
     RuntimeValue b = pop();
     RuntimeValue a = pop();
+    requireNumeric("MOD", a); requireNumeric("MOD", b);
     long long divisor = asInteger(b);
     if (divisor == 0) RuntimeErrorHook::divisionByZero();
     push(RuntimeValue::integer(modChecked(asInteger(a), divisor, "MOD")));
@@ -442,6 +454,30 @@ void StackMachine::execRET(const RuntimeInstruction& instr) {
         context.frameDepth--;
     }
 
+    // verifikasi keseimbangan frame sebelum keluar (corruption & smashing)
+    if (!context.frames.empty()) {
+        const FrameGuard guard = context.frames.back();
+        context.frames.pop_back();
+
+        // a4 stack corruption: push/pop tak simetris → stack pointer geser
+        int actualTop = static_cast<int>(context.stack.size());
+        if (actualTop != guard.expectedTop) {
+            RuntimeErrorHook::stackCorruption(
+                "unbalanced push/pop left the stack misaligned on return",
+                guard.expectedTop, actualTop);
+        }
+
+        // a3 stack smashing: cell return address (bp+2) tertimpa data lain
+        int raIdx = guard.basePtr + 2;
+        if (raIdx >= 0 && static_cast<size_t>(raIdx) < context.stack.size()) {
+            long long storedRa = context.stack[static_cast<size_t>(raIdx)].intVal;
+            if (storedRa != guard.canaryRa) {
+                RuntimeErrorHook::stackSmashing(guard.canaryRa,
+                                                static_cast<int>(storedRa));
+            }
+        }
+    }
+
     // For main program: return address is -1 → halt
     if (context.ra < 0) {
         context.halted = true;
@@ -496,6 +532,28 @@ double StackMachine::asReal(const RuntimeValue& v) {
 bool StackMachine::isNumber(const RuntimeValue& v) {
     return v.kind == RuntimeValue::Kind::INTEGER
         || v.kind == RuntimeValue::Kind::REAL;
+}
+
+// nama tipe nilai aktual di stack (untuk pesan runtime type checking)
+string StackMachine::valueKindName(const RuntimeValue& v) {
+    switch (v.kind) {
+        case RuntimeValue::Kind::NONE:    return "none";
+        case RuntimeValue::Kind::INTEGER: return "integer";
+        case RuntimeValue::Kind::REAL:    return "real";
+        case RuntimeValue::Kind::BOOLEAN: return "boolean";
+        case RuntimeValue::Kind::CHAR:    return "char";
+        case RuntimeValue::Kind::STRING:  return "string";
+    }
+    return "unknown";
+}
+
+// runtime type checking: operasi aritmatika hanya boleh atas nilai numerik.
+// kalau nilai aktual di memori ternyata beda tipe (mis. string masuk ke '-'),
+// hentikan eksekusi dgn TypeMismatchError, bukan diam-diam dikonversi.
+void StackMachine::requireNumeric(const string& op, const RuntimeValue& v) {
+    if (!isNumber(v)) {
+        RuntimeErrorHook::typeMismatch(op, "numeric", valueKindName(v));
+    }
 }
 
 // ---------------------------------------------------------------------------

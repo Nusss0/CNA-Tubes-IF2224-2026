@@ -6,6 +6,7 @@ void RuntimeContext::reset() {
     ra = -1;
     dl = -1;
     frameDepth = 0;
+    frames.clear();
     ip = 0;
     program.clear();
     output.str("");
