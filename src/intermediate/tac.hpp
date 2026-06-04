@@ -27,8 +27,13 @@ public:
     // expose the raw instruction list (for TacAdapter -> interpreter)
     const std::vector<TacInstr>& instructions() const { return code; }
 
+    // error saat generate (mis. operator yg tak punya opcode di set M4)
+    bool hasErrors() const { return !errors.empty(); }
+    const std::vector<std::string>& getErrors() const { return errors; }
+
 private:
     std::vector<TacInstr> code;
+    std::vector<std::string> errors;
     int labelCounter = 0;
     int nextAddr = 3;                                  // 0=static link, 1=dynamic link, 2=return addr
     std::unordered_map<std::string,int> addrMap;       // lowercased var name -> memory address
