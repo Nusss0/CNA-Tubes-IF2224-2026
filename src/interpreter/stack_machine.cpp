@@ -2,8 +2,14 @@
 #include "runtime_error_hook.hpp"
 #include <stdexcept>
 #include <cstdlib>
+#include <limits>
 
 using namespace std;
+
+// batas kedalaman stack — cegah stack overflow (mis. rekursi tanpa base case)
+static const size_t MAX_STACK_DEPTH = 100000;
+// batas jumlah frame — sesuai spek (maksimal ~1000 frame)
+static const int MAX_FRAME_DEPTH = 1000;
 
 // ---------------------------------------------------------------------------
 // construction
@@ -52,6 +58,9 @@ bool StackMachine::isHalted() const {
 // ---------------------------------------------------------------------------
 
 void StackMachine::push(const RuntimeValue& v) {
+    if (context.stack.size() >= MAX_STACK_DEPTH) {
+        RuntimeErrorHook::stackOverflow(1, context.stack.size(), MAX_STACK_DEPTH);
+    }
     context.stack.push_back(v);
 }
 
@@ -111,6 +120,14 @@ void StackMachine::execINT(const RuntimeInstruction& instr) {
         RuntimeErrorHook::invalidOperand("INT", "missing size argument");
     }
     int size = stoi(instr.args[1]);
+
+    // cek batas frame — cegah stack overflow akibat rekursi tanpa base case
+    if (context.frameDepth >= MAX_FRAME_DEPTH) {
+        RuntimeErrorHook::stackOverflow(static_cast<size_t>(size),
+                                        context.stack.size(),
+                                        static_cast<size_t>(MAX_FRAME_DEPTH));
+    }
+    context.frameDepth++;
 
     // Save previous frame info (for main: dl = -1, ra = -1)
     context.dl = context.bp;
@@ -222,39 +239,31 @@ void StackMachine::execCAL(const RuntimeInstruction& instr) {
     //   - set ra = ip + 1 (return address, 1‑based)
     //   - jump to target
 
-    if (instr.target < 0) {
-        RuntimeErrorHook::invalidJumpTarget(instr.target,
-                                             static_cast<int>(context.program.size()));
-    }
+    // Save return address (1‑based line number of instruksi berikutnya)
+    context.ra = static_cast<int>(context.ip) + 1 + 1;
 
-    // Save return address
-    context.ra = static_cast<int>(context.ip) + 1 + 1;  // 1‑based line number
+    // Jump to target (validasi + konversi 1‑based → 0‑based)
+    context.ip = resolveJump(instr.target);
+}
 
-    // Jump to target (convert 1‑based target → 0‑based index)
-    int tgt = instr.target - 1;
-    if (tgt < 0 || static_cast<size_t>(tgt) >= context.program.size()) {
-        RuntimeErrorHook::invalidJumpTarget(instr.target,
-                                             static_cast<int>(context.program.size()));
+// ---------------------------------------------------------------------------
+// resolveJump – validasi target lompat 1‑based, kembalikan index 0‑based.
+// target -1 berarti label tak ditemukan saat resolusi (invalid jump target).
+// ---------------------------------------------------------------------------
+size_t StackMachine::resolveJump(int target) const {
+    int progSize = static_cast<int>(context.program.size());
+    // target < 1 (termasuk -1 label tak resolve) atau di luar batas → invalid
+    if (target < 1 || target > progSize) {
+        RuntimeErrorHook::invalidJumpTarget(target, progSize);
     }
-    context.ip = static_cast<size_t>(tgt);
+    return static_cast<size_t>(target - 1);  // 1‑based → 0‑based
 }
 
 // ---------------------------------------------------------------------------
 // JMP  – unconditional jump
 // ---------------------------------------------------------------------------
 void StackMachine::execJMP(const RuntimeInstruction& instr) {
-    int tgt = instr.target;
-    if (tgt < 0) {
-        // PLACEHOLDER(Daniel): label not yet resolved
-        RuntimeErrorHook::invalidJumpTarget(tgt,
-                                             static_cast<int>(context.program.size()));
-    }
-    int idx = tgt - 1;  // 1‑based → 0‑based
-    if (idx < 0 || static_cast<size_t>(idx) >= context.program.size()) {
-        RuntimeErrorHook::invalidJumpTarget(tgt,
-                                             static_cast<int>(context.program.size()));
-    }
-    context.ip = static_cast<size_t>(idx);
+    context.ip = resolveJump(instr.target);
 }
 
 // ---------------------------------------------------------------------------
@@ -268,18 +277,7 @@ void StackMachine::execJPC(const RuntimeInstruction& instr) {
 
     if (!cond.isTruthy()) {
         // condition is false → jump  (IF_FALSE convention)
-        int tgt = instr.target;
-        if (tgt < 0) {
-            // PLACEHOLDER(Daniel): label not yet resolved
-            RuntimeErrorHook::invalidJumpTarget(tgt,
-                                                 static_cast<int>(context.program.size()));
-        }
-        int idx = tgt - 1;
-        if (idx < 0 || static_cast<size_t>(idx) >= context.program.size()) {
-            RuntimeErrorHook::invalidJumpTarget(tgt,
-                                                 static_cast<int>(context.program.size()));
-        }
-        context.ip = static_cast<size_t>(idx);
+        context.ip = resolveJump(instr.target);
     } else {
         context.ip++;
     }
@@ -323,7 +321,7 @@ void StackMachine::execOPR_neg() {
     if (!hasValues(1)) RuntimeErrorHook::stackUnderflow("NEG", context.stack.size(), 1);
     RuntimeValue a = pop();
     if (a.kind == RuntimeValue::Kind::INTEGER) {
-        push(RuntimeValue::integer(-a.intVal));
+        push(RuntimeValue::integer(negChecked(a.intVal, "NEG")));
     } else if (a.kind == RuntimeValue::Kind::REAL) {
         push(RuntimeValue::real(-a.realVal));
     } else {
@@ -345,7 +343,7 @@ void StackMachine::execOPR_add() {
         if (aReal || bReal) {
             push(RuntimeValue::real(asReal(a) + asReal(b)));
         } else {
-            push(RuntimeValue::integer(asInteger(a) + asInteger(b)));
+            push(RuntimeValue::integer(addChecked(asInteger(a), asInteger(b), "ADD")));
         }
     } else {
         // string concatenation or error
@@ -364,7 +362,7 @@ void StackMachine::execOPR_sub() {
     if (a.kind == RuntimeValue::Kind::REAL || b.kind == RuntimeValue::Kind::REAL)
         push(RuntimeValue::real(asReal(a) - asReal(b)));
     else
-        push(RuntimeValue::integer(asInteger(a) - asInteger(b)));
+        push(RuntimeValue::integer(subChecked(asInteger(a), asInteger(b), "SUB")));
 }
 
 void StackMachine::execOPR_mul() {
@@ -374,7 +372,7 @@ void StackMachine::execOPR_mul() {
     if (a.kind == RuntimeValue::Kind::REAL || b.kind == RuntimeValue::Kind::REAL)
         push(RuntimeValue::real(asReal(a) * asReal(b)));
     else
-        push(RuntimeValue::integer(asInteger(a) * asInteger(b)));
+        push(RuntimeValue::integer(mulChecked(asInteger(a), asInteger(b), "MUL")));
 }
 
 void StackMachine::execOPR_div() {
@@ -459,6 +457,10 @@ void StackMachine::execOPR_wrtln() {
 void StackMachine::execRET(const RuntimeInstruction& instr) {
     (void)instr;
 
+    if (context.frameDepth > 0) {
+        context.frameDepth--;
+    }
+
     // For main program: return address is -1 → halt
     if (context.ra < 0) {
         context.halted = true;
@@ -513,4 +515,45 @@ double StackMachine::asReal(const RuntimeValue& v) {
 bool StackMachine::isNumber(const RuntimeValue& v) {
     return v.kind == RuntimeValue::Kind::INTEGER
         || v.kind == RuntimeValue::Kind::REAL;
+}
+
+// ---------------------------------------------------------------------------
+// integer aritmatika dengan deteksi overflow/underflow
+// pakai builtin g++ supaya wrap-around ketahuan, lalu lempar Over/UnderflowError
+// ---------------------------------------------------------------------------
+
+long long StackMachine::addChecked(long long a, long long b, const string& op) {
+    long long r;
+    if (__builtin_add_overflow(a, b, &r)) {
+        if (a > 0 && b > 0) RuntimeErrorHook::numericOverflow(op);
+        RuntimeErrorHook::numericUnderflow(op);
+    }
+    return r;
+}
+
+long long StackMachine::subChecked(long long a, long long b, const string& op) {
+    long long r;
+    if (__builtin_sub_overflow(a, b, &r)) {
+        if (a >= 0 && b < 0) RuntimeErrorHook::numericOverflow(op);
+        RuntimeErrorHook::numericUnderflow(op);
+    }
+    return r;
+}
+
+long long StackMachine::mulChecked(long long a, long long b, const string& op) {
+    long long r;
+    if (__builtin_mul_overflow(a, b, &r)) {
+        bool sameSign = (a > 0) == (b > 0);
+        if (sameSign) RuntimeErrorHook::numericOverflow(op);
+        RuntimeErrorHook::numericUnderflow(op);
+    }
+    return r;
+}
+
+long long StackMachine::negChecked(long long a, const string& op) {
+    long long r;
+    if (__builtin_sub_overflow(0LL, a, &r)) {
+        RuntimeErrorHook::numericOverflow(op);
+    }
+    return r;
 }

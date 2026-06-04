@@ -34,6 +34,9 @@ private:
     // execute one instruction (called by step)
     void execute(const RuntimeInstruction& instr);
 
+    // validasi target lompat (1‑based) → kembalikan index 0‑based, lempar jika invalid
+    size_t resolveJump(int target) const;
+
     // instruction handlers
     void execINT(const RuntimeInstruction& instr);
     void execLIT(const RuntimeInstruction& instr);
@@ -65,4 +68,10 @@ private:
     static long long   asInteger(const RuntimeValue& v);
     static double      asReal(const RuntimeValue& v);
     static bool        isNumber(const RuntimeValue& v);
+
+    // operasi integer dengan deteksi overflow/underflow
+    static long long   addChecked(long long a, long long b, const std::string& op);
+    static long long   subChecked(long long a, long long b, const std::string& op);
+    static long long   mulChecked(long long a, long long b, const std::string& op);
+    static long long   negChecked(long long a, const std::string& op);
 };
