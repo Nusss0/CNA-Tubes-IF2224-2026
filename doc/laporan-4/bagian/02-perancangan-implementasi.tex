@@ -1,0 +1,341 @@
+%==============================================================================
+%  BAB II - PERANCANGAN DAN IMPLEMENTASI
+%==============================================================================
+\section{Perancangan dan Implementasi}
+
+%==============================================================================
+\subsection{Perancangan}
+
+\subsubsection{Gambaran Umum Sistem}
+
+Pada Milestone 4, program menambahkan dua tahap baru pada pipeline kompiler:
+\emph{Intermediate Code Generation} dan \emph{Execution}. Alur kerjanya dapat
+diringkas sebagai berikut.
+
+\begin{center}
+\fcolorbox{abuGaris}{abuKode}{\parbox{0.92\textwidth}{\centering\ttfamily
+Decorated AST $\rightarrow$ Intermediate Code (TAC) $\rightarrow$ Stack Machine $\rightarrow$ Program Output}}
+\end{center}
+
+Generator menerima Decorated AST hasil Milestone 3 lalu menelusurinya untuk
+menghasilkan daftar instruksi TAC. Daftar tersebut kemudian dikonversi melalui
+sebuah \emph{adapter} dan dieksekusi oleh stack machine, yang mengelola memori
+dalam bentuk stack dan mencetak keluaran nyata ketika menemui instruksi
+\texttt{WRT}/\texttt{WRTLN}. Spesifikasi prosesnya: \textbf{masukan} berupa
+Decorated AST, \textbf{keluaran} berupa Intermediate Code beserta output program,
+dengan \textbf{algoritma} penelusuran berbasis DFS untuk pembentukan TAC dan
+\emph{stack machine} untuk eksekusi.
+
+\subsubsection{Teknologi yang Digunakan}
+
+Sesuai ketentuan, bahasa pemrograman yang digunakan disamakan dengan milestone
+sebelumnya, yaitu \textbf{C++} dengan standar \textbf{C++17}, dikompilasi
+menggunakan \texttt{g++} dan diotomasi dengan \textbf{GNU Make}. Tidak ada
+pustaka eksternal yang digunakan; seluruh komponen dibangun di atas pustaka
+standar C++ (\texttt{<vector>}, \texttt{<string>}, \texttt{<unordered\_map>},
+\texttt{<sstream>}, \texttt{<memory>}). Deteksi \emph{overflow} aritmatika
+memanfaatkan \emph{builtin} \texttt{\_\_builtin\_*\_overflow} milik \texttt{g++}.
+
+\subsubsection{Struktur Modul dan Arsitektur File}
+
+Sesuai prinsip modularitas, kode Milestone 4 dipisahkan berdasarkan tanggung
+jawab ke dalam dua direktori: \texttt{src/intermediate/} (pembentukan TAC) dan
+\texttt{src/interpreter/} (eksekusi). Tabel~\ref{tab:file} memerinci berkas-berkas
+baru beserta perannya.
+
+\begin{table}[H]
+\centering
+\caption{Arsitektur berkas Milestone 4.}
+\label{tab:file}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabularx}{\textwidth}{@{}l X@{}}
+\toprule
+\textbf{Berkas} & \textbf{Tanggung Jawab} \\
+\midrule
+\texttt{intermediate/tac.\{hpp,cpp\}}     & Kelas \texttt{TacGenerator}: konversi Decorated AST $\rightarrow$ TAC. \\
+\texttt{interpreter/runtime\_value.*}      & Struktur \texttt{RuntimeValue}: nilai bertipe pada stack. \\
+\texttt{interpreter/runtime\_instruction.hpp} & Struktur \texttt{RuntimeInstruction}: satu instruksi siap eksekusi. \\
+\texttt{interpreter/runtime\_context.*}    & Struktur \texttt{RuntimeContext}: stack, IP, BP, dan pembukuan frame. \\
+\texttt{interpreter/stack\_machine.*}      & Kelas \texttt{StackMachine}: inti siklus fetch--decode--execute. \\
+\texttt{interpreter/runtime\_error\_hook.*}& \texttt{RuntimeErrorHook}: klasifikasi dan pelemparan error runtime. \\
+\texttt{interpreter/tac\_adapter.*}        & \texttt{TacAdapter}: jembatan \texttt{TacInstr} $\rightarrow$ \texttt{RuntimeInstruction}. \\
+\texttt{interpreter/interpreter.*}         & Kelas \texttt{Interpreter}: pembungkus VM + penangkap error. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Justifikasi Pilihan Implementasi}
+
+\textbf{Penelusuran berbasis DFS.} Pembentukan TAC dilakukan dengan menelusuri AST
+secara \emph{depth-first}. Untuk ekspresi, penelusuran postorder menjamin operand
+sudah berada di stack sebelum operatornya dijalankan; untuk pernyataan,
+penelusuran preorder yang dipadu pembentukan label menjaga urutan eksekusi sesuai
+struktur program.
+
+\textbf{Stack machine, bukan register machine.} Model stack machine dipilih karena
+selaras dengan konvensi instruksi yang disediakan (gaya ORKOM) dan menghapus
+kebutuhan akan alokasi register/variabel sementara eksplisit---hasil antara cukup
+ditinggalkan pada puncak stack.
+
+\textbf{Pola Adapter.} \texttt{TacGenerator} (tim pembentuk kode) dan
+\texttt{StackMachine} (tim interpreter) sengaja dipisahkan oleh
+\texttt{TacAdapter}. Dengan begitu, kode interpreter tidak bergantung pada detail
+internal generator; perubahan pada salah satu sisi tidak merembet ke sisi lain.
+
+\textbf{Error sebagai pengecualian, bukan crash.} Seluruh pelanggaran runtime
+dilempar sebagai \texttt{RuntimeError} dan ditangkap di satu titik
+(\texttt{Interpreter::run}), sehingga program selalu berhenti secara \emph{graceful}
+dengan pesan informatif alih-alih \emph{segmentation fault}.
+
+%==============================================================================
+\subsection{Implementasi Intermediate Code Generator}
+
+\texttt{TacGenerator} mengubah Decorated AST menjadi vektor \texttt{TacInstr}.
+Tiap instruksi merekam \emph{opcode}, daftar argumen, label opsional, serta target
+lompat yang terisi setelah resolusi.
+
+\subsubsection{Pemetaan Alamat Memori}
+
+Sebelum kode dihasilkan, seluruh deklarasi variabel dipindai dan dipetakan ke
+alamat memori mulai dari 3 (sel 0--2 dicadangkan untuk static link, dynamic link,
+dan return address). Ukuran memori frame utama lalu dialokasikan dengan instruksi
+\texttt{INT} sebesar $3 + (\text{jumlah variabel})$.
+
+\begin{lstlisting}[style=kodeCpp, caption={Pemetaan alamat variabel dan alokasi memori awal.}]
+void TacGenerator::collectDecls(const AstNodePtr& program) {
+    for (auto& child : program->children) {
+        if (child->kind != AstKind::Declarations) continue;
+        for (auto& decl : child->children) {
+            if (decl->kind == AstKind::VarDecl && !decl->value.empty()) {
+                string key = lower(decl->value);
+                if (addrMap.find(key) == addrMap.end())
+                    addrMap[key] = nextAddr++;   // 3, 4, 5, ...
+            }
+        }
+    }
+}
+// ... pada generate():
+int varCount = static_cast<int>(addrMap.size());
+emit("INT", {"0", to_string(3 + varCount)});     // INT 0 <3 + jml var>
+\end{lstlisting}
+
+\subsubsection{Pembentukan Ekspresi (DFS Postorder)}
+
+Ekspresi dibentuk secara rekursif. Literal menjadi \texttt{LIT}, variabel menjadi
+\texttt{LOD} pada alamatnya, sedangkan operasi biner mem-\emph{push} operand kiri
+lalu kanan sebelum memanggil \texttt{OPR} dengan opcode yang sesuai. Pemetaan
+operator ke opcode mengikuti Tabel~\ref{tab:opr}.
+
+\begin{lstlisting}[style=kodeCpp, caption={Pembentukan ekspresi: hasil ditinggalkan di puncak stack.}]
+void TacGenerator::genExpr(const AstNodePtr& node) {
+    switch (node->kind) {
+        case AstKind::Number: case AstKind::RealNumber:
+        case AstKind::BoolLit: /* ... */
+            emit("LIT", {"0", node->value});               break;
+        case AstKind::Var:
+            emit("LOD", {"0", to_string(addrOf(node))});   break;
+        case AstKind::BinOp: {
+            genExpr(node->children[0]);   // operand kiri di-push lebih dulu
+            genExpr(node->children[1]);   // lalu operand kanan
+            int code = oprCode(node->value);
+            if (code >= 0) emit("OPR", {"0", to_string(code)});
+            break;
+        }
+        case AstKind::UnaryOp:
+            genExpr(node->children[0]);
+            if (node->value == "-") emit("OPR", {"0", "1"});  // NEG
+            break;
+    }
+}
+\end{lstlisting}
+
+\subsubsection{Pembentukan Control Flow}
+
+Pernyataan \texttt{if} dan \texttt{while} dibentuk dengan menyemai label simbolik
+(\texttt{L1}, \texttt{L2}, \dots) yang nantinya diresolusi menjadi nomor baris.
+Konvensi \emph{IF\_FALSE} diwujudkan oleh \texttt{JPC}: kondisi di-\emph{push},
+lalu \texttt{JPC} melompati blok bila kondisi salah.
+
+\begin{lstlisting}[style=kodeCpp, caption={Pembentukan \texttt{if-else} dan \texttt{while} dengan label \& jump.}]
+void TacGenerator::genIf(const AstNodePtr& node) {
+    string elseLbl = newLabel(), endLbl = newLabel();
+    genExpr(cond);                    // push kondisi
+    emit("JPC", {"0", elseLbl});      // salah -> lompat ke else
+    if (thenNode) genNode(thenNode);
+    if (elseNode) emit("JMP", {"0", endLbl});
+    emitLabel(elseLbl);
+    if (elseNode) genNode(elseNode);
+    emitLabel(endLbl);
+}
+
+void TacGenerator::genWhile(const AstNodePtr& node) {
+    string startLbl = newLabel(), endLbl = newLabel();
+    emitLabel(startLbl);
+    genExpr(cond);                    // push kondisi
+    emit("JPC", {"0", endLbl});       // salah -> keluar loop
+    if (body) genNode(body);
+    emit("JMP", {"0", startLbl});     // ulangi
+    emitLabel(endLbl);
+}
+\end{lstlisting}
+
+\subsubsection{Resolusi Label dan Pencetakan}
+
+Setelah seluruh kode terbentuk, label diresolusi menjadi nomor baris 1-\emph{based},
+lalu \emph{pseudo-op} \texttt{LABEL} dihapus agar daftar instruksi padat dan langsung
+dapat dieksekusi (jika dibiarkan, label akan menggeser indeks setiap instruksi
+sesudahnya). Saat dicetak, \texttt{JMP}/\texttt{JPC} ditampilkan dengan target
+numeriknya dalam format kanonik \texttt{<baris> <OP> <lev> <operand>}.
+
+%==============================================================================
+\subsection{Implementasi Interpreter (Stack Machine)}
+
+\subsubsection{Representasi Nilai dan Konteks}
+
+Setiap sel stack menyimpan \texttt{RuntimeValue} yang bertipe (\texttt{INTEGER},
+\texttt{REAL}, \texttt{BOOLEAN}, \texttt{CHAR}, \texttt{STRING}, atau
+\texttt{NONE}). Tipe yang melekat inilah yang memungkinkan \emph{runtime type
+checking} dan pencetakan keluaran yang benar. Seluruh keadaan eksekusi disimpan
+dalam \texttt{RuntimeContext}: vektor \texttt{stack}, base pointer \texttt{bp},
+return address \texttt{ra}, dynamic link \texttt{dl}, kedalaman frame, instruction
+pointer \texttt{ip}, vektor program, serta \emph{buffer} keluaran.
+
+\subsubsection{Siklus Fetch--Decode--Execute}
+
+Metode \texttt{run()} mengulang \texttt{step()} hingga program \emph{halt} atau IP
+melewati akhir program. Tiap \texttt{step()} membaca instruksi pada IP lalu
+mendispatch ke \emph{handler} sesuai opcode.
+
+\begin{lstlisting}[style=kodeCpp, caption={Inti siklus eksekusi dan dispatch instruksi.}]
+void StackMachine::run() {
+    while (!context.halted && context.ip < context.program.size())
+        step();
+}
+void StackMachine::execute(const RuntimeInstruction& instr) {
+    const string& op = instr.op;
+    if (op == "INT") { execINT(instr); return; }
+    if (op == "LIT") { execLIT(instr); return; }
+    if (op == "LOD") { execLOD(instr); return; }
+    if (op == "STO") { execSTO(instr); return; }
+    if (op == "JMP") { execJMP(instr); return; }
+    if (op == "JPC") { execJPC(instr); return; }
+    if (op == "OPR") { execOPR(instr); return; }
+    if (op == "RET") { execRET(instr); return; }
+    // ... CAL, LABEL ...
+    RuntimeErrorHook::invalidOperand(op, "unknown instruction");
+}
+\end{lstlisting}
+
+\subsubsection{Inisiasi Frame dan Akses Memori}
+
+Instruksi \texttt{INT} membentuk frame baru: mendorong static link, dynamic link,
+dan return address, lalu mengalokasikan sel variabel. Akses variabel
+(\texttt{LOD}/\texttt{STO}) dihitung relatif terhadap \texttt{bp} dan divalidasi
+terhadap batas stack sebelum digunakan.
+
+\begin{lstlisting}[style=kodeCpp, caption={\texttt{LOD} dengan validasi akses memori (mencegah OOB).}]
+void StackMachine::execLOD(const RuntimeInstruction& instr) {
+    int addr = parseIntArg(instr, 1);
+    int absIdx = context.bp + addr;
+    if (absIdx < 0 || (size_t)absIdx >= context.stack.size())
+        RuntimeErrorHook::invalidMemoryAccess(addr, context.bp,
+                                              context.stack.size());
+    push(context.stack[absIdx]);
+    context.ip++;
+}
+\end{lstlisting}
+
+\subsubsection{Lompatan dan Konvensi IF\_FALSE}
+
+\texttt{JPC} mengeluarkan kondisi dari puncak stack; bila bernilai \emph{false}, IP
+dipindahkan ke target, jika tidak IP maju satu langkah. Setiap target lompat
+divalidasi oleh \texttt{resolveJump} agar tidak menunjuk ke luar program.
+
+\begin{lstlisting}[style=kodeCpp, caption={\texttt{JPC} (jump-if-false) dan validasi target lompat.}]
+void StackMachine::execJPC(const RuntimeInstruction& instr) {
+    RuntimeValue cond = pop();
+    if (!cond.isTruthy()) context.ip = resolveJump(instr.target);
+    else                  context.ip++;
+}
+size_t StackMachine::resolveJump(int target) const {
+    int n = (int)context.program.size();
+    if (target < 1 || target > n)
+        RuntimeErrorHook::invalidJumpTarget(target, n);
+    return (size_t)(target - 1);   // 1-based -> 0-based
+}
+\end{lstlisting}
+
+\subsubsection{Operasi melalui OPR}
+
+\texttt{execOPR} mendispatch nomor operasi ke sub-handler. Operasi aritmatika
+mengeluarkan dua operand (atau satu untuk \texttt{NEG}), memvalidasi tipenya,
+melakukan perhitungan ber-\emph{checked} terhadap overflow, lalu mem-\emph{push}
+hasilnya. Operasi perbandingan menghasilkan \texttt{BOOLEAN}, sedangkan
+\texttt{WRT}/\texttt{WRTLN} menulis nilai puncak stack ke \emph{buffer} keluaran.
+
+%==============================================================================
+\subsection{Implementasi Error Handling dan Keamanan Runtime}
+
+Seluruh kondisi error dipusatkan pada modul \texttt{RuntimeErrorHook}. Setiap
+pelanggaran memanggil fungsi yang memformat pesan \texttt{[ERROR] <Jenis>: <detail> !}
+lalu melempar \texttt{RuntimeError} dengan klasifikasi jenisnya, sehingga pesan
+konsisten dan mudah ditelusuri.
+
+\textbf{Aritmatika ber-checked.} Operasi integer memakai \emph{builtin} g++ untuk
+mendeteksi \emph{wrap-around}, lalu melempar \texttt{OverflowError}/\texttt{UnderflowError}.
+
+\begin{lstlisting}[style=kodeCpp, caption={Penjumlahan dengan deteksi overflow/underflow.}]
+long long StackMachine::addChecked(long long a, long long b, const string& op) {
+    long long r;
+    if (__builtin_add_overflow(a, b, &r)) {
+        if (a > 0 && b > 0) RuntimeErrorHook::numericOverflow(op);
+        RuntimeErrorHook::numericUnderflow(op);
+    }
+    return r;
+}
+\end{lstlisting}
+
+\textbf{Deteksi stack corruption dan smashing.} Saat \texttt{INT}, sebuah
+\texttt{FrameGuard} mencatat posisi puncak yang seharusnya saat keluar
+(\emph{expected top}) dan salinan return address sebagai \emph{canary}. Pada
+\texttt{RET}, posisi puncak aktual dibandingkan dengan \emph{expected top} (deteksi
+\emph{corruption}) dan sel return address dibandingkan dengan \emph{canary}
+(deteksi \emph{smashing}).
+
+\begin{lstlisting}[style=kodeCpp, caption={Verifikasi keseimbangan frame saat \texttt{RET}.}]
+const FrameGuard guard = context.frames.back();
+context.frames.pop_back();
+int actualTop = (int)context.stack.size();
+if (actualTop != guard.expectedTop)              // push/pop tak simetris
+    RuntimeErrorHook::stackCorruption("unbalanced push/pop ...",
+                                      guard.expectedTop, actualTop);
+int raIdx = guard.basePtr + 2;                    // sel return address
+if (context.stack[raIdx].intVal != guard.canaryRa)
+    RuntimeErrorHook::stackSmashing(guard.canaryRa, context.stack[raIdx].intVal);
+\end{lstlisting}
+
+Tabel~\ref{tab:err} merangkum jenis-jenis error runtime yang ditangani beserta
+mekanisme deteksinya.
+
+\begin{table}[H]
+\centering
+\caption{Ringkasan penanganan error runtime.}
+\label{tab:err}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}l X@{}}
+\toprule
+\textbf{Jenis Error} & \textbf{Mekanisme Deteksi} \\
+\midrule
+DivisionByZeroError      & Pembagi bernilai nol pada \texttt{DIV}/\texttt{MOD}. \\
+OverflowError / UnderflowError & Hasil aritmatika integer membungkus (\emph{wrap-around}). \\
+StackOverflowError       & Kedalaman frame atau ukuran stack melampaui batas. \\
+StackUnderflowError      & \emph{Pop} dipanggil saat stack kekurangan nilai. \\
+InvalidJumpError         & Target \texttt{JMP}/\texttt{JPC}/\texttt{CAL} di luar program. \\
+InvalidMemoryAccessError & Alamat \texttt{LOD}/\texttt{STO} di luar batas stack. \\
+StackCorruptionError     & Posisi stack pointer tidak sesuai saat keluar frame. \\
+StackSmashingError       & \emph{Canary} return address tertimpa data lain. \\
+TypeMismatchError        & Operand aritmatika ternyata bukan nilai numerik. \\
+InvalidOperandError      & Argumen instruksi hilang atau bukan integer valid. \\
+\bottomrule
+\end{tabularx}
+\end{table}
