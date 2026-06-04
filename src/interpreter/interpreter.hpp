@@ -17,11 +17,19 @@ public:
 
     void loadProgram(const std::vector<RuntimeInstruction>& instrs);
 
-    void run();
+    // jalankan program; menangkap RuntimeError supaya tidak crash.
+    // kembalikan true jika selesai tanpa error runtime.
+    bool run();
 
     std::string getOutput() const;
     bool isHalted() const;
 
+    // info error runtime (jika run() mengembalikan false)
+    bool hasError() const { return errorRaised; }
+    const std::string& getError() const { return errorMessage; }
+
 private:
     std::unique_ptr<StackMachine> vm;
+    bool errorRaised = false;
+    std::string errorMessage;
 };
