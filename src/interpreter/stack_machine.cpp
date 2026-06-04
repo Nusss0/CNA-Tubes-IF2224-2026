@@ -116,10 +116,7 @@ void StackMachine::execute(const RuntimeInstruction& instr) {
 // INT  – initiate memory:  INT <lev> <size>
 // ---------------------------------------------------------------------------
 void StackMachine::execINT(const RuntimeInstruction& instr) {
-    if (instr.args.size() < 2) {
-        RuntimeErrorHook::invalidOperand("INT", "missing size argument");
-    }
-    int size = stoi(instr.args[1]);
+    int size = parseIntArg(instr, 1);
 
     // cek batas frame — cegah stack overflow akibat rekursi tanpa base case
     if (context.frameDepth >= MAX_FRAME_DEPTH) {
@@ -192,10 +189,7 @@ void StackMachine::execLIT(const RuntimeInstruction& instr) {
 // LOD  – load from address:  LOD <lev> <addr>
 // ---------------------------------------------------------------------------
 void StackMachine::execLOD(const RuntimeInstruction& instr) {
-    if (instr.args.size() < 2) {
-        RuntimeErrorHook::invalidOperand("LOD", "missing address argument");
-    }
-    int addr = stoi(instr.args[1]);
+    int addr = parseIntArg(instr, 1);
     int absIdx = context.bp + addr;
 
     if (absIdx < 0 || static_cast<size_t>(absIdx) >= context.stack.size()) {
@@ -212,10 +206,7 @@ void StackMachine::execLOD(const RuntimeInstruction& instr) {
 // STO  – store to address:  STO <lev> <addr>
 // ---------------------------------------------------------------------------
 void StackMachine::execSTO(const RuntimeInstruction& instr) {
-    if (instr.args.size() < 2) {
-        RuntimeErrorHook::invalidOperand("STO", "missing address argument");
-    }
-    int addr = stoi(instr.args[1]);
+    int addr = parseIntArg(instr, 1);
     int absIdx = context.bp + addr;
 
     if (absIdx < 0 || static_cast<size_t>(absIdx) >= context.stack.size()) {
@@ -287,10 +278,7 @@ void StackMachine::execJPC(const RuntimeInstruction& instr) {
 // OPR  – operation:  OPR <lev> <opcode>
 // ---------------------------------------------------------------------------
 void StackMachine::execOPR(const RuntimeInstruction& instr) {
-    if (instr.args.size() < 2) {
-        RuntimeErrorHook::invalidOperand("OPR", "missing opcode argument");
-    }
-    int code = stoi(instr.args[1]);
+    int code = parseIntArg(instr, 1);
 
     switch (code) {
         case 1:  execOPR_neg();   break;
@@ -383,7 +371,7 @@ void StackMachine::execOPR_div() {
     if (divisor == 0.0) RuntimeErrorHook::divisionByZero();
     // Arion div returns integer if both operands are integer
     if (a.kind == RuntimeValue::Kind::INTEGER && b.kind == RuntimeValue::Kind::INTEGER)
-        push(RuntimeValue::integer(asInteger(a) / asInteger(b)));
+        push(RuntimeValue::integer(divChecked(asInteger(a), asInteger(b), "DIV")));
     else
         push(RuntimeValue::real(asReal(a) / divisor));
 }
@@ -394,7 +382,7 @@ void StackMachine::execOPR_mod() {
     RuntimeValue a = pop();
     long long divisor = asInteger(b);
     if (divisor == 0) RuntimeErrorHook::divisionByZero();
-    push(RuntimeValue::integer(asInteger(a) % divisor));
+    push(RuntimeValue::integer(modChecked(asInteger(a), divisor, "MOD")));
 }
 
 void StackMachine::execOPR_eql() {
@@ -518,6 +506,34 @@ bool StackMachine::isNumber(const RuntimeValue& v) {
 }
 
 // ---------------------------------------------------------------------------
+// parseIntArg – ambil argumen ke-idx sebagai integer dgn validasi penuh.
+// argumen hilang / bukan angka / di luar jangkauan int → InvalidOperand
+// (RuntimeError), bukan std::exception mentah dari stoi yang bikin crash.
+// ---------------------------------------------------------------------------
+int StackMachine::parseIntArg(const RuntimeInstruction& instr, size_t idx) {
+    if (idx >= instr.args.size()) {
+        RuntimeErrorHook::invalidOperand(instr.op,
+            "missing integer argument at position " + to_string(idx));
+    }
+    const string& raw = instr.args[idx];
+    size_t consumed = 0;
+    long long value = 0;
+    try {
+        value = stoll(raw, &consumed);
+    } catch (const exception&) {
+        RuntimeErrorHook::invalidOperand(instr.op, "argument '" + raw + "' is not an integer");
+    }
+    // tolak sisa karakter non-angka (mis. "12x")
+    if (consumed != raw.size()) {
+        RuntimeErrorHook::invalidOperand(instr.op, "argument '" + raw + "' is not an integer");
+    }
+    if (value < numeric_limits<int>::min() || value > numeric_limits<int>::max()) {
+        RuntimeErrorHook::invalidOperand(instr.op, "argument '" + raw + "' is out of range");
+    }
+    return static_cast<int>(value);
+}
+
+// ---------------------------------------------------------------------------
 // integer aritmatika dengan deteksi overflow/underflow
 // pakai builtin g++ supaya wrap-around ketahuan, lalu lempar Over/UnderflowError
 // ---------------------------------------------------------------------------
@@ -548,6 +564,22 @@ long long StackMachine::mulChecked(long long a, long long b, const string& op) {
         RuntimeErrorHook::numericUnderflow(op);
     }
     return r;
+}
+
+long long StackMachine::divChecked(long long a, long long b, const string& op) {
+    // pembagian dgn 0 ditangani pemanggil; sisa kasus UB hanya MIN / -1
+    if (a == numeric_limits<long long>::min() && b == -1) {
+        RuntimeErrorHook::numericOverflow(op);
+    }
+    return a / b;
+}
+
+long long StackMachine::modChecked(long long a, long long b, const string& op) {
+    // MIN % -1 juga UB walau hasil matematisnya 0
+    if (a == numeric_limits<long long>::min() && b == -1) {
+        RuntimeErrorHook::numericOverflow(op);
+    }
+    return a % b;
 }
 
 long long StackMachine::negChecked(long long a, const string& op) {

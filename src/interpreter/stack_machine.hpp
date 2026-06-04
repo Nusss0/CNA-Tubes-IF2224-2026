@@ -73,5 +73,10 @@ private:
     static long long   addChecked(long long a, long long b, const std::string& op);
     static long long   subChecked(long long a, long long b, const std::string& op);
     static long long   mulChecked(long long a, long long b, const std::string& op);
+    static long long   divChecked(long long a, long long b, const std::string& op);
+    static long long   modChecked(long long a, long long b, const std::string& op);
     static long long   negChecked(long long a, const std::string& op);
+
+    // parsing argumen TAC dengan validasi (gagal → InvalidOperand, bukan crash)
+    static int parseIntArg(const RuntimeInstruction& instr, size_t idx);
 };
