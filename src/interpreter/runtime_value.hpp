@@ -22,6 +22,7 @@ struct RuntimeValue {
 
     bool isTruthy() const;
     std::string toString() const;
+    std::string realToString() const;
     bool equals(const RuntimeValue& other) const;
     int compare(const RuntimeValue& other) const; // -1 less, 0 equal, 1 greater
 };

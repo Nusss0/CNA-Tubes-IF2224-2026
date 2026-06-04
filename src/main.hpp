@@ -14,3 +14,5 @@
 #include "semantic/ast_printer.hpp"
 #include "semantic/ast_decorator.hpp"
 #include "intermediate/tac.hpp"
+#include "interpreter/interpreter.hpp"
+#include "interpreter/tac_adapter.hpp"

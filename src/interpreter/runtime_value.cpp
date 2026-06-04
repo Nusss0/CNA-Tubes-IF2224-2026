@@ -61,12 +61,25 @@ string RuntimeValue::toString() const {
     switch (kind) {
         case Kind::NONE:    return "none";
         case Kind::INTEGER: return to_string(intVal);
-        case Kind::REAL:    return to_string(realVal);
-        case Kind::BOOLEAN: return boolVal ? "true" : "false";
+        case Kind::REAL:    return realToString();
+        case Kind::BOOLEAN: return boolVal ? "TRUE" : "FALSE";
         case Kind::CHAR:    return string(1, static_cast<char>(intVal));
         case Kind::STRING:  return strVal;
     }
     return "";
+}
+
+// real dicetak rapi: buang trailing zero, tetap pertahankan minimal satu desimal
+string RuntimeValue::realToString() const {
+    ostringstream os;
+    os << realVal;
+    string s = os.str();
+    // pastikan terlihat seperti real (tambah ".0" jika hasilnya bulat tanpa titik)
+    if (s.find('.') == string::npos && s.find('e') == string::npos
+        && s.find("inf") == string::npos && s.find("nan") == string::npos) {
+        s += ".0";
+    }
+    return s;
 }
 
 bool RuntimeValue::equals(const RuntimeValue& other) const {

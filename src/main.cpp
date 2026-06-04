@@ -170,7 +170,26 @@ int main() {
       for (const auto& err : analyzer.getErrors()) {
          cout << "  " << err << "\n";
       }
+      cout << "\n[INFO] Code generation skipped due to semantic error(s).\n";
+      return 0;
+   }
+   cout << "\n[INFO] Semantic analysis finished successfully.\n";
+
+   // intermediate code generation (decorated AST -> stack-machine TAC)
+   if (!ast) return 0;
+   cout << "\n=== Intermediate Code ===\n";
+   TacGenerator generator;
+   generator.generate(ast);
+   generator.print(cout);
+
+   // execution: jalankan TAC di stack machine, cetak output program
+   cout << "\n=== Program Output ===\n";
+   Interpreter interpreter;
+   interpreter.loadProgram(TacAdapter::convertAll(generator.instructions()));
+   if (!interpreter.run()) {
+      cout << interpreter.getOutput();
+      cout << interpreter.getError() << "\n";
    } else {
-      cout << "\n[INFO] Semantic analysis finished successfully.\n";
+      cout << interpreter.getOutput();
    }
 }

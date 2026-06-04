@@ -102,13 +102,6 @@ void StackMachine::execute(const RuntimeInstruction& instr) {
     if (op == "OPR")       { execOPR(instr);  return; }
     if (op == "RET")       { execRET(instr);  return; }
     if (op == "LABEL")     { context.ip++;    return; }
-    if (op == "ASSIGN" || op == "BINOP" || op == "UNOP" || op == "CALL") {
-        // PLACEHOLDER(Michael/Daniel): legacy instruction formats —
-        // interpreter skips them for now; they will be replaced by proper
-        // LIT/LOD/STO/OPR/JMP/JPC after the intermediate generator is finalised.
-        context.ip++;
-        return;
-    }
     RuntimeErrorHook::invalidOperand(op, "unknown instruction");
 }
 
