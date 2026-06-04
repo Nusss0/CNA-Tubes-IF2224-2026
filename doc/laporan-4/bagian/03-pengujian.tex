@@ -53,7 +53,9 @@ end.
 99
 \end{lstlisting}
 
-\placeholderGambar[4.5cm]{[ PLACEHOLDER SCREENSHOT KASUS 1 ]\\ Tangkapan layar Intermediate Code dan Program Output untuk SimpleAssign.}
+\begin{center}
+\includegraphics[width=14cm]{gambar/tc1_src_assignment.png}
+\end{center}
 
 \textbf{Analisis.} Variabel \texttt{n} dipetakan ke alamat 3 sehingga \texttt{INT}
 mengalokasikan 4 sel (3 administratif + 1 variabel). Penimpaan \texttt{n := 99}
@@ -114,7 +116,9 @@ TRUE
 TRUE
 \end{lstlisting}
 
-\placeholderGambar[4.5cm]{[ PLACEHOLDER SCREENSHOT KASUS 2 ]\\ Tangkapan layar Intermediate Code dan Program Output untuk ExprAssign.}
+\begin{center}
+\includegraphics[width=15cm]{gambar/tc2_src_expr_assign.png}
+\end{center}
 
 \textbf{Analisis.} Perhitungan terverifikasi: $a = 10$, $b = (10-2)\times 3 = 24$,
 $c = 24 \div 5 = 4$ (pembagian integer). Operator relasional \texttt{=} (OPR 7) dan
@@ -167,7 +171,9 @@ end.
 0
 \end{lstlisting}
 
-\placeholderGambar[4.5cm]{[ PLACEHOLDER SCREENSHOT KASUS 3 ]\\ Tangkapan layar Intermediate Code dan Program Output untuk NestedExpr.}
+\begin{center}
+\includegraphics[width=15cm]{gambar/tc3_src_nested_expr.png}
+\end{center}
 
 \textbf{Analisis.} $x = (3+4)\times(10-2) = 7 \times 8 = 56$ dan
 $c \bmod d = 10 \bmod 2 = 0$. Subekspresi kiri dihitung lebih dulu (OPR 2), lalu
@@ -232,7 +238,9 @@ $y = 20$, lalu perulangan menghitung mundur hingga 0.
 \noindent(keluaran sebenarnya satu nilai per baris; ditampilkan dua baris di sini
 demi keringkasan).
 
-\placeholderGambar[4.5cm]{[ PLACEHOLDER SCREENSHOT KASUS 4 ]\\ Tangkapan layar Intermediate Code dan Program Output untuk TestKeywords.}
+\begin{center}
+\includegraphics[width=15cm]{gambar/tc4_src_testkeywords.png}
+\end{center}
 
 \textbf{Analisis.} Intermediate Code yang dihasilkan identik dengan contoh pada
 spesifikasi. \texttt{JPC 0 13} melompati blok \texttt{then} bila kondisi salah,
@@ -279,7 +287,9 @@ end.
 [ERROR] DivisionByZeroError: division by zero !
 \end{lstlisting}
 
-\placeholderGambar[4.5cm]{[ PLACEHOLDER SCREENSHOT KASUS 5 ]\\ Tangkapan layar pesan DivisionByZeroError saat eksekusi src\_divzero.}
+\begin{center}
+\includegraphics[width=15cm]{gambar/tc5_src_divzero.png}
+\end{center}
 
 \textbf{Analisis.} Saat \texttt{DIV} (OPR 5) mendeteksi pembagi bernilai nol,
 \texttt{RuntimeErrorHook::divisionByZero()} melempar \texttt{RuntimeError} yang
@@ -326,7 +336,9 @@ end.
 [ERROR] OverflowError: 'MUL' result exceeds the maximum integer value !
 \end{lstlisting}
 
-\placeholderGambar[4.5cm]{[ PLACEHOLDER SCREENSHOT KASUS 6 ]\\ Tangkapan layar pesan OverflowError saat eksekusi src\_overflow.}
+\begin{center}
+\includegraphics[width=15cm]{gambar/tc6_src_overflow.png}
+\end{center}
 
 \textbf{Analisis.} $4{,}000{,}000{,}000^2 = 1.6 \times 10^{19}$ melampaui batas
 maksimum integer. \texttt{mulChecked} mendeteksinya melalui
