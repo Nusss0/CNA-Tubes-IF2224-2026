@@ -65,6 +65,13 @@ Menerima Parse Tree hasil parser dan melakukan **analisis semantik** menggunakan
 - **Prosedur/Fungsi:** jumlah argumen dan kompatibilitas tipe parameter pada pemanggilan
 - **Enumerated:** identifier enum didaftarkan sebagai konstanta ordinal di tabel simbol
 
+**Milestone 4 — Kode Antara (TAC Generator) & Interpreter**
+
+Menerima Decorated AST hasil analisis semantik untuk ditranslasikan menjadi kode **Three-Address Code (TAC)**, yang kemudian dieksekusi langsung oleh **Virtual Machine/Interpreter**. Fitur utamanya mencakup:
+- **Pembangkitan TAC:** Membuat kode TAC untuk aritmatika, logika, variabel, `if-else`, `while`, dan compound block.
+- **Mekanisme Flow-Control:** Mengelola label unik global dan menentukan arah lompatan instruksi.
+- **Eksekusi VM / Stack Machine:** Menjalankan instruksi lompatan JMP (tanpa syarat) dan JPC (bersyarat) untuk mengatur Program Counter.
+- **Validasi Runtime:** Memastikan keamanan memori yang mencakup penanganan *stack overflow/underflow*, *stack corruption*, *smashing*, penanganan *error hook*, dan pengecekan tipe data dinamis saat eksekusi (*runtime type checking*).
 ---
 
 ## Requirements
@@ -112,13 +119,15 @@ make clean
    - Milestone 1 : `M1/input1.txt`
    - Milestone 2 : `M2/input-1.txt`
    - Milestone 3 : `M3/comprehensive.txt`
+   - Milestone 4 : `M4/src_divzero.txt`
 3. Program menampilkan hasil secara berurutan:
    - **Token list** (mode 1) — hasil tokenisasi
    - **Parse Tree** — struktur sintaksis
    - **Abstract Syntax Tree (AST)** — representasi semantik ringkas
    - **Decorated AST** — AST yang dianotasi tipe dan informasi tabel simbol
    - **Symbol Table / Block Table / Array Table** — dump tabel simbol lengkap
-   - **Daftar error semantik** (jika ada)
+   - **Three-Address Code (TAC) Dump** — representasi deret instruksi kode beserta penomoran dan label tujuannya
+   - **Hasil Eksekusi Interpreter** — output konsol riil dari program simulasi runtime beserta status validasi memorinya
 4. Di setiap tahap, program menanyakan apakah hasil ingin diekspor ke file.
    - Jika ya, masukkan nama file output (akan disimpan di direktori `test/` sesuai path yang dimasukkan).
 
@@ -143,3 +152,12 @@ make clean
 | Renuno Yuqa Frinardi    | Implementasi pengecekan control flow dan penulisan laporan              |
 | Valentino Daniel Kusumo | Implementasi pengecekan tipe dan deklarasi, penulisan laporan           |
 | Michael James Liman     | Implementasi TypeCheck, AstDecorator, AstPrinter, dan penulisan laporan |
+
+### Milestone 4
+
+| Nama                    | Tugas                                                                   |
+| ----------------------- | ----------------------------------------------------------------------- |
+| Stevanus Agustaf Wongso | Validasi runtime pada stack machine, modul RuntimeErrorHook, deteksi over-flow/underflow, stack corruption & sma- shing, runtime type checking (bonus) |
+| Renuno Yuqa Frinardi    | Inti interpreter / stack machine (StackMachine, RuntimeValue, RuntimeContext), TacAdapter, dan penyusunan kasus uji Milestone 4 |
+| Valentino Daniel Kusumo | Pembentukan control flow pada generator (genIf, genWhile) & compound block, integrasi pipeline pada main, serta penulisan laporan |
+| Michael James Liman     | Inti TacGenerator (pemetaan alamat, pembentukan ekspresi & penugasan, resolusi label, pencetakan), kasus uji ekspresi/control flow, dan penulisan laporan |
