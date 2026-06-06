@@ -1,0 +1,284 @@
+%==============================================================================
+%  BAB I - LANDASAN TEORI
+%==============================================================================
+\section{Landasan Teori}
+
+Milestone 4 merupakan tahap akhir dari pengembangan kompiler bahasa Arion. Pada
+tahap ini, \emph{Decorated AST} yang dihasilkan Milestone 3 diubah menjadi
+\emph{Intermediate Code} berbentuk \emph{Three-Address Code} (TAC), lalu
+dieksekusi oleh sebuah \emph{interpreter} berbasis \emph{stack machine} hingga
+menghasilkan keluaran nyata program. Bab ini menjelaskan teori dan konsep yang
+melandasi kedua komponen tersebut.
+
+%------------------------------------------------------------------------------
+\subsection{Arsitektur Kompiler: Front-end dan Back-end}
+
+Kompiler modern umumnya dibagi menjadi dua fase arsitektur: \textbf{front-end}
+dan \textbf{back-end}. Milestone 1 sampai 3 (analisis leksikal, sintaksis, dan
+semantik) merupakan bagian front-end yang berurusan langsung dengan teks kode
+sumber---memotongnya menjadi token, memvalidasi tata bahasanya, lalu memastikan
+maknanya benar. Keluaran front-end adalah struktur data murni berupa
+\emph{Decorated AST} yang sudah bebas dari teks mentah.
+
+Milestone 4 sepenuhnya berada pada area back-end. Fase ini tidak lagi peduli
+pada detail sintaksis Arion (titik koma, kurung, atau spasi), melainkan berfokus
+pada dua tugas inti: \textbf{sintesis}, yaitu mengonversi Decorated AST menjadi
+instruksi operasional standar (Intermediate Code), dan \textbf{eksekusi}, yaitu
+mengelola memori serta menjalankan instruksi tersebut pada mesin virtual. Pemisahan
+yang tegas ini memberi keuntungan rekayasa: bila suatu saat sintaks Arion diubah,
+cukup front-end yang dirombak selama Decorated AST yang dihasilkan tetap sama,
+back-end tidak perlu disentuh.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.55cm and 0.9cm,
+  kotak/.style={draw, rounded corners, minimum height=1cm, minimum width=2.3cm,
+    align=center, font=\footnotesize, fill=biruITB!8},
+  kotakBE/.style={draw, rounded corners, minimum height=1cm, minimum width=2.3cm,
+    align=center, font=\footnotesize, fill=hijauJudul!12},
+  panah/.style={-{Stealth[length=2.5mm]}, thick}
+]
+  \node[kotak] (src) {Source\\Code};
+  \node[kotak, right=of src] (tok) {Tokens};
+  \node[kotak, right=of tok] (pt) {Parse\\Tree};
+  \node[kotak, right=of pt] (ast) {Decorated\\AST};
+  \node[kotakBE, below=1.1cm of ast] (tac) {Intermediate\\Code (TAC)};
+  \node[kotakBE, left=of tac] (vm) {Stack\\Machine};
+  \node[kotakBE, left=of vm] (out) {Program\\Output};
+
+  \draw[panah] (src) -- (tok);
+  \draw[panah] (tok) -- (pt);
+  \draw[panah] (pt) -- (ast);
+  \draw[panah] (ast) -- (tac);
+  \draw[panah] (tac) -- (vm);
+  \draw[panah] (vm) -- (out);
+
+  \node[font=\scriptsize\itshape, above=0.05cm of tok] {Front-end (M1--M3)};
+  \node[font=\scriptsize\itshape, below=0.05cm of vm] {Back-end (M4)};
+\end{tikzpicture}
+\caption{Pipeline kompiler Arion. Milestone 4 menambahkan tahap pembentukan
+Intermediate Code dan eksekusi pada stack machine.}
+\label{fig:pipeline}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\subsection{Intermediate Code Generation}
+
+\subsubsection{Decorated AST sebagai Sumber Kebenaran}
+
+\emph{Decorated AST} adalah \emph{Abstract Syntax Tree} yang setiap simpulnya
+telah dianotasi (didekorasi) dengan informasi semantik, terutama \textbf{tipe
+data} hasil ekspresi dan \textbf{referensi tabel simbol} untuk variabel. Anotasi
+ini bersifat wajib bagi generator kode. Sebagai ilustrasi, ketika generator
+menemui ekspresi \texttt{a + b}, tanpa informasi tipe ia tidak dapat memutuskan
+apakah operasi tersebut penjumlahan bilangan atau penggabungan string. Dengan
+Decorated AST, generator dapat memilih instruksi Intermediate Code yang tepat.
+
+\subsubsection{Three-Address Code (TAC)}
+
+Langkah berikutnya adalah meratakan (\emph{flattening}) Decorated AST menjadi
+daftar instruksi linier. Format yang digunakan adalah \textbf{Three-Address
+Code}, dinamai demikian karena tiap instruksi maksimal melibatkan tiga alamat
+(dua operand sumber dan satu tujuan), dengan struktur dasar
+\texttt{hasil = operand1 operator operand2}.
+
+Karena CPU tidak dapat menghitung ekspresi panjang sekaligus, TAC memecah ekspresi
+kompleks menggunakan \textbf{variabel sementara} (\emph{temporary}, ditulis
+\texttt{t1}, \texttt{t2}, \dots). Pohon ekspresi dievaluasi dari cabang terdalam
+menuju akar. Misalnya, ekspresi \texttt{x := (a + b) * (c - d)} diratakan menjadi:
+
+\begin{lstlisting}[style=kodeTAC]
+t1 := a + b      { evaluasi tanda kurung pertama }
+t2 := c - d      { evaluasi tanda kurung kedua   }
+t3 := t1 * t2    { kalikan hasil keduanya        }
+x  := t3         { simpan hasil akhir ke x       }
+\end{lstlisting}
+
+Pada implementasi berbasis stack machine, peran variabel sementara digantikan oleh
+puncak stack: hasil antara cukup ditinggalkan di atas stack untuk dikonsumsi
+operasi berikutnya, sehingga tidak perlu dialokasikan nama \texttt{t1}, \texttt{t2}
+secara eksplisit.
+
+\subsubsection{Translasi Control Flow}
+
+Tantangan terbesar pada pembentukan Intermediate Code adalah meratakan struktur
+\emph{control flow} bersarang (\texttt{if-else}, \texttt{while}) menjadi daftar
+linier. Solusinya menggunakan kombinasi \textbf{Label} dan \textbf{Jump}:
+
+\textbf{Label} adalah penanda statis posisi suatu baris dalam TAC.
+\textbf{Jump mutlak} (\texttt{JMP}) melompat tanpa syarat ke sebuah label,
+sedangkan \textbf{jump bersyarat} (\texttt{JPC}) melompat hanya jika kondisi yang
+dievaluasi bernilai \emph{false}. Konvensi melompat-jika-salah ini disebut
+\emph{IF\_FALSE} dan memanfaatkan prinsip \emph{fall-through}: ketika kondisi
+benar, eksekusi langsung berlanjut ke instruksi berikutnya tanpa lompatan,
+sehingga alur kontrol menjadi lebih sederhana. Pada tugas besar ini konvensi
+\emph{IF\_FALSE} bersifat wajib.
+
+Berikut pola translasi \texttt{if-else} (kiri) dan \texttt{while} (kanan) menjadi
+Intermediate Code.
+
+\begin{center}
+\begin{minipage}[t]{0.46\textwidth}
+\centering\textbf{IF-ELSE}
+\begin{lstlisting}[style=kodeTAC, numbers=none]
+  t1 := x > 10
+  JPC t1 -> L_ELSE
+  y := 1
+  JMP L_END
+L_ELSE:
+  y := 0
+L_END:
+\end{lstlisting}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.46\textwidth}
+\centering\textbf{WHILE}
+\begin{lstlisting}[style=kodeTAC, numbers=none]
+L_START:
+  t1 := i < 5
+  JPC t1 -> L_END
+  i := i + 1
+  JMP L_START
+L_END:
+\end{lstlisting}
+\end{minipage}
+\end{center}
+
+%------------------------------------------------------------------------------
+\subsection{Katalog Instruksi Intermediate Code}
+
+Intermediate Code Arion menggunakan himpunan instruksi bergaya ORKOM. Tiap
+instruksi terdiri atas \emph{mnemonic} dan operand opsional. Tabel~\ref{tab:instr}
+merangkum instruksi yang didukung, sedangkan Tabel~\ref{tab:opr} merinci operasi
+yang dipanggil melalui instruksi \texttt{OPR}.
+
+\begin{table}[H]
+\centering
+\caption{Daftar instruksi Intermediate Code.}
+\label{tab:instr}
+\renewcommand{\arraystretch}{1.15}
+\begin{tabularx}{\textwidth}{@{}l l X@{}}
+\toprule
+\textbf{Instruksi} & \textbf{Operasi} & \textbf{Keterangan} \\
+\midrule
+\texttt{LIT v} & Load Literal     & Memasukkan nilai literal \texttt{v} ke stack. \\
+\texttt{LOD a} & Load Value       & Memuat nilai dari alamat \texttt{a} ke stack. \\
+\texttt{STO a} & Store Value      & Mengambil nilai puncak stack, menyimpannya ke alamat \texttt{a}. \\
+\texttt{CAL l} & Call             & Memanggil fungsi/prosedur pada baris \texttt{l}. \\
+\texttt{INT m} & Initiate Memory  & Mengalokasikan memori (stack frame) berukuran \texttt{m}. \\
+\texttt{JMP l} & Unconditional Jump & Lompat ke baris \texttt{l} tanpa syarat. \\
+\texttt{JPC l} & Conditional Jump & Lompat ke baris \texttt{l} bila kondisi puncak stack salah. \\
+\texttt{OPR o} & Operation        & Menjalankan operasi bernomor \texttt{o} (lihat Tabel~\ref{tab:opr}). \\
+\texttt{RET}   & Return           & Keluar dari fungsi/prosedur atau mengakhiri program. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Daftar operasi instruksi \texttt{OPR}.}
+\label{tab:opr}
+\renewcommand{\arraystretch}{1.1}
+\small
+\begin{tabularx}{\textwidth}{@{}c l X | c l X@{}}
+\toprule
+\textbf{No} & \textbf{Nama} & \textbf{Fungsi} & \textbf{No} & \textbf{Nama} & \textbf{Fungsi} \\
+\midrule
+1 & NEG & Negasi puncak stack          & 8  & NEQ   & Tidak sama dengan \\
+2 & ADD & Penjumlahan                  & 9  & LSS   & Kurang dari \\
+3 & SUB & Pengurangan                  & 10 & GEQ   & Lebih dari sama dengan \\
+4 & MUL & Perkalian                    & 11 & GTR   & Lebih dari \\
+5 & DIV & Pembagian                    & 12 & LEQ   & Kurang dari sama dengan \\
+6 & MOD & Modulus                      & 13 & WRT   & Cetak output \\
+7 & EQL & Sama dengan                  & 14 & WRTLN & Cetak output + newline \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+%------------------------------------------------------------------------------
+\subsection{Arsitektur Mesin Eksekusi: Interpreter dan Stack}
+
+\subsubsection{Virtual Machine dan Siklus Eksekusi}
+
+\emph{Interpreter} pada Milestone 4 berperan sebagai sebuah \emph{Virtual Machine}
+(VM). Sama seperti CPU sungguhan, VM membaca instruksi satu per satu menggunakan
+penunjuk \emph{Instruction Pointer} (IP) atau \emph{Program Counter}. VM bekerja
+dalam \textbf{siklus eksekusi} tiga tahap: \textbf{Fetch} (membaca instruksi yang
+ditunjuk IP), \textbf{Decode} (membedah mnemonic dan operand-nya), dan
+\textbf{Execute} (melakukan aksi nyata). Setelah Execute, IP bergerak maju ke
+instruksi berikutnya, kecuali pada instruksi lompat (\texttt{JMP}/\texttt{JPC})
+yang menggeser IP langsung ke baris tujuan. Siklus berulang hingga IP mencapai
+akhir program atau menemui \texttt{RET}.
+
+\subsubsection{Memori Eksekusi: The Stack}
+
+Struktur memori utama VM adalah \textbf{stack} yang bekerja dengan prinsip
+\textbf{LIFO} (\emph{Last In, First Out})---data hanya bisa dimasukkan
+(\emph{push}) dan diambil (\emph{pop}) dari puncak. Stack dipilih, bukan array
+biasa, karena berkaitan erat dengan \emph{scope} dan pemanggilan fungsi. Setiap
+kali program memasuki blok atau memanggil fungsi, VM membuat \emph{stack frame}
+baru. Pada konvensi yang dipakai, tiga sel pertama setiap frame selalu terisi
+\textbf{Static Link} (alamat 0), \textbf{Dynamic Link} (alamat 1), dan
+\textbf{Return Address} (alamat 2); sel selanjutnya (mulai alamat 3) digunakan
+untuk variabel. Akses variabel dilakukan relatif terhadap \emph{Base Pointer}
+(BP) frame aktif, sementara \emph{Stack Pointer} (SP) menunjuk puncak stack.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  sel/.style={draw, minimum width=5.5cm, minimum height=0.7cm, font=\footnotesize, anchor=south west},
+  selV/.style={sel, fill=hijauJudul!12},
+  selR/.style={sel, fill=biruITB!10},
+]
+  \node[selR] at (0,0)   (a0) {alamat 0 -- Static Link};
+  \node[selR] at (0,0.7) (a1) {alamat 1 -- Dynamic Link};
+  \node[selR] at (0,1.4) (a2) {alamat 2 -- Return Address};
+  \node[selV] at (0,2.1) (a3) {alamat 3 -- Variable (x)};
+  \node[selV] at (0,2.8) (a4) {alamat 4 -- Variable (y)};
+  \node[sel, fill=white] at (0,3.5) (a5) {puncak -- operand/hasil sementara};
+
+  \node[font=\footnotesize, right=0.3cm of a0] {$\leftarrow$ BP (basis frame)};
+  \node[font=\footnotesize, right=0.3cm of a5] {$\leftarrow$ SP (puncak stack)};
+\end{tikzpicture}
+\caption{Struktur stack frame: tiga sel administratif diikuti sel variabel; ruang
+di atasnya dipakai sebagai operand dan hasil sementara perhitungan.}
+\label{fig:frame}
+\end{figure}
+
+%------------------------------------------------------------------------------
+\subsection{Keamanan Runtime dan Penanganan Kerentanan}
+
+Interpreter yang tangguh tidak hanya menjalankan kode yang benar, tetapi juga
+mampu bertahan (tidak \emph{crash}) ketika diberi kode yang salah atau tidak
+masuk akal. Berbeda dengan bahasa tingkat rendah yang menyerahkan keamanan kepada
+\emph{programmer}, bahasa yang berjalan di atas VM wajib memiliki mekanisme
+perlindungan internal. Sebagai bagian dari spesifikasi (termasuk tantangan bonus),
+interpreter Arion mendeteksi dan menangani sejumlah kerentanan berikut.
+
+\textbf{Kerentanan pada stack.} \emph{Stack overflow} terjadi ketika frame terus
+ditambahkan melampaui batas memori, umumnya akibat rekursi tanpa \emph{base case};
+interpreter membatasi kedalaman frame dan melempar error bila terlampaui.
+\emph{Stack underflow} terjadi ketika operasi \emph{pop} dipanggil saat stack
+kosong. \emph{Stack smashing} adalah perusakan \emph{return address} oleh data yang
+meluber, dideteksi menggunakan \emph{canary} pada sel return address.
+\emph{Stack corruption} terjadi ketika jumlah \emph{push} dan \emph{pop} tidak
+simetris sehingga indeks frame bergeser; ini dideteksi dengan memverifikasi posisi
+stack pointer saat keluar dari frame.
+
+\textbf{Kerentanan memori dan alur.} \emph{Out-of-Bounds Access} dicegah dengan
+memvalidasi setiap alamat pada \texttt{LOD}/\texttt{STO} terhadap batas memori.
+\emph{Invalid Jump Target} dicegah dengan memverifikasi target \texttt{JMP},
+\texttt{JPC}, dan \texttt{CAL} berada dalam rentang program sebelum IP dipindahkan.
+
+\textbf{Kerentanan aritmatika.} Tipe \emph{integer} memiliki kapasitas terbatas;
+operasi yang melampaui batas atas (\emph{overflow}) atau bawah (\emph{underflow})
+akan menyebabkan \emph{wrap-around} yang mengacaukan perhitungan. Interpreter
+mendeteksi kondisi ini sebelum hasil sempat membungkus, lalu melempar
+\textbf{OverflowError} atau \textbf{UnderflowError}. Demikian pula pembagian dengan
+nol dicegat sebagai \textbf{DivisionByZeroError}.
+
+\textbf{Runtime type checking.} Karena Arion bersifat \emph{strongly-typed} dan
+sebagian besar tipe telah diverifikasi pada analisis semantik, runtime type
+checking tidak diwajibkan. Meski demikian, interpreter tetap memvalidasi bahwa
+operand operasi aritmatika benar-benar bernilai numerik saat eksekusi; bila tidak,
+ia melempar \textbf{TypeMismatchError} alih-alih melakukan konversi diam-diam.

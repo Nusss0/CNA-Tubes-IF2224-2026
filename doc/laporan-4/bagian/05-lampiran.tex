@@ -1,0 +1,74 @@
+%==============================================================================
+%  LAMPIRAN
+%==============================================================================
+\section{Lampiran}
+
+\subsection{Tautan Release Repository GitHub}
+
+Kode sumber lengkap kompiler Arion beserta release Milestone 4 tersedia pada
+repositori GitHub berikut.
+
+\begin{itemize}
+  \item \textbf{Repositori:} \url{https://github.com/Nusss0/CNA-Tubes-IF2224-2026}
+  \item \textbf{Release Milestone 4 (tag \texttt{v0.4.1}):}\\
+        \url{https://github.com/Nusss0/CNA-Tubes-IF2224-2026/releases/tag/v0.4.1}
+\end{itemize}
+
+\subsection{Pembagian Tugas}
+
+Pembagian tugas dan persentase kontribusi setiap anggota kelompok pada Milestone 4
+dirangkum pada Tabel~\ref{tab:tugas}.
+
+\begin{table}[H]
+\centering
+\caption{Pembagian tugas dan persentase kontribusi Milestone 4.}
+\label{tab:tugas}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{@{}l c X c@{}}
+\toprule
+\textbf{Nama} & \textbf{NIM} & \textbf{Tugas Milestone 4} & \textbf{Kontribusi} \\
+\midrule
+Stevanus Agustaf Wongso & 13524020 &
+Validasi runtime pada stack machine, modul \texttt{RuntimeErrorHook}, deteksi
+overflow/underflow, stack corruption \& smashing, runtime type checking
+(tantangan bonus). & 25\% \\
+\addlinespace
+Renuno Yuqa Frinardi & 13524080 &
+Inti interpreter / stack machine (\texttt{StackMachine}, \texttt{RuntimeValue},
+\texttt{RuntimeContext}), \texttt{TacAdapter}, dan penyusunan kasus uji
+Milestone 4. & 25\% \\
+\addlinespace
+Valentino Daniel Kusumo & 13524104 &
+Pembentukan control flow pada generator (\texttt{genIf}, \texttt{genWhile}) 
+\& compound block, integrasi pipeline pada \texttt{main}, serta penulisan laporan. & 25\% \\
+\addlinespace
+Michael James Liman & 13524106 &
+Inti \texttt{TacGenerator} (pemetaan alamat, pembentukan ekspresi \& penugasan,
+resolusi label, pencetakan), kasus uji ekspresi/control flow, dan penulisan
+laporan. & 25\% \\
+\midrule
+\multicolumn{3}{r}{\textbf{Total}} & \textbf{100\%} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+%==============================================================================
+%  REFERENSI
+%==============================================================================
+\section{Referensi}
+
+\begin{enumerate}[label={[\arabic*]}]
+  \item A. V. Aho, M. S. Lam, R. Sethi, dan J. D. Ullman, \textit{Compilers:
+        Principles, Techniques, and Tools}, edisi ke-2. Boston: Addison-Wesley,
+        2006.
+  \item Tim Asisten IF2224, \textit{Spesifikasi Milestone 4 -- Tubes IF2224 TBFO:
+        Intermediate Code and Interpreter}, Institut Teknologi Bandung, 2026.
+  \item Tim Asisten IF2224, \textit{Lampiran Spesifikasi Milestone 4 -- Guidebook
+        Konvensi Intermediate Code}, Institut Teknologi Bandung, 2026.
+  \item P. Koopman, \textit{Stack Computers: The New Wave}. [Daring]. Tersedia:
+        \url{https://users.ece.cmu.edu/~koopman/stack_computers/sec3_2.html}
+  \item E. Bendersky, ``Stack frame layout on x86-64,'' 2011. [Daring]. Tersedia:
+        \url{https://eli.thegreenplace.net/2011/09/06/stack-frame-layout-on-x86-64}
+  \item GEPL, ``Decorated Abstract Syntax Tree,'' University of Minho. [Daring].
+        Tersedia: \url{https://epl.di.uminho.pt/~gepl/GEPL_DS/Alma2/dapast.php}
+\end{enumerate}

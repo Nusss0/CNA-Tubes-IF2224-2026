@@ -1,0 +1,15 @@
+#include "runtime_context.hpp"
+
+void RuntimeContext::reset() {
+    stack.clear();
+    bp = 0;
+    ra = -1;
+    dl = -1;
+    frameDepth = 0;
+    frames.clear();
+    ip = 0;
+    program.clear();
+    output.str("");
+    output.clear();
+    halted = false;
+}

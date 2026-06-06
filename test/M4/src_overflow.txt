@@ -1,0 +1,8 @@
+program NumericOverflow;
+var
+  big, hasil: integer;
+begin
+  big := 4000000000;
+  hasil := big * big;
+  writeln(hasil);
+end.

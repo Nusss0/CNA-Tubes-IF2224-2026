@@ -1,0 +1,48 @@
+%==============================================================================
+%  BAB IV - KESIMPULAN DAN SARAN
+%==============================================================================
+\section{Kesimpulan dan Saran}
+
+\subsection{Kesimpulan}
+
+Milestone 4 berhasil menyatukan seluruh komponen kompiler Arion yang dibangun pada
+milestone sebelumnya menjadi sebuah kompiler yang utuh dan dapat dieksekusi. Dari
+pengerjaan tahap ini dapat ditarik beberapa kesimpulan.
+
+Pertama, \emph{Decorated AST} hasil analisis semantik berhasil diratakan menjadi
+\emph{Three-Address Code} melalui penelusuran berbasis DFS. Ekspresi diterjemahkan
+secara postorder sehingga operand selalu tersedia di stack sebelum operatornya
+dijalankan, sementara struktur control flow \texttt{if-else} dan \texttt{while}
+diratakan menggunakan kombinasi label dan instruksi lompat dengan konvensi
+\emph{IF\_FALSE}. Intermediate Code yang dihasilkan terbukti identik dengan contoh
+pada spesifikasi.
+
+Kedua, interpreter berbasis \emph{stack machine} mampu mengeksekusi Intermediate
+Code dengan benar melalui siklus \emph{fetch--decode--execute}, mengelola memori
+dalam bentuk stack frame (static link, dynamic link, return address, dan variabel),
+serta menghasilkan keluaran nyata program melalui operasi \texttt{WRT}/\texttt{WRTLN}.
+
+Ketiga, aspek keamanan runtime---termasuk tantangan bonus---telah
+diimplementasikan. Interpreter menangani pembagian dengan nol, overflow/underflow
+aritmatika, stack overflow/underflow, stack corruption, stack smashing, akses
+memori dan target lompat di luar batas, serta pemeriksaan tipe saat eksekusi.
+Seluruh kondisi error dilaporkan secara \emph{graceful} dengan pesan informatif
+tanpa membuat program \emph{crash}, sebagaimana ditunjukkan pada Kasus 5 dan 6.
+
+Keempat, kode disusun secara modular dengan pemisahan tanggung jawab yang jelas
+antara pembentukan kode (\texttt{intermediate/}) dan eksekusi
+(\texttt{interpreter/}), dijembatani oleh pola \emph{adapter} sehingga kedua sisi
+tetap terpisah (\emph{loosely coupled}).
+
+\subsection{Saran}
+
+Beberapa hal dapat dikembangkan lebih lanjut. Implementasi pemanggilan
+fungsi/prosedur (\texttt{CAL}/\texttt{RET} dengan \emph{nested scope} dan
+\emph{passing} argumen penuh) masih bersifat dasar dan dapat dilengkapi agar
+mendukung rekursi serta variabel lokal antar-frame secara menyeluruh. Selain itu,
+pembentukan kode dapat diperluas untuk menangani tipe data terstruktur seperti
+\emph{array} dan \emph{record} beserta validasi indeks \emph{out-of-bounds} saat
+runtime. Dari sisi optimasi, \emph{constant folding} dan eliminasi instruksi
+redundan dapat ditambahkan pada tahap pembentukan TAC untuk menghasilkan kode yang
+lebih ringkas. Terakhir, cakupan pengujian otomatis dapat diperluas dengan kerangka
+uji regresi agar setiap perubahan dapat diverifikasi dengan cepat.
